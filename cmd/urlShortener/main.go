@@ -19,7 +19,7 @@ func main() {
 	}
 
 	connectString := loadENV()
-	
+
 	pool, err := pgxpool.New(context.Background(), connectString)
 	if err != nil {
 		log.Fatalf("ошибка подключения к БД: %v", err)
@@ -28,8 +28,12 @@ func main() {
 
 	router := chi.NewRouter()
 
-	h := handler.New(pool)
-	router.Post("/create", h.HandlerCreateShortenedLink)
+	h := handler.New(pool, os.Getenv("LINK_PREFIX"))
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/index.html")
+	})
+	router.Post("/create", h.CreateShortenedLink)
+	router.Get("/{code}", h.GetOriginalURL)
 
 	fmt.Println("сервер запущен на :1234")
 	err = http.ListenAndServe(":1234", router)
