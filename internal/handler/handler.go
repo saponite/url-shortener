@@ -2,20 +2,33 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"log"
-	"math/rand/v2"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const linkPrefix = "https://short.ly/"
-const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const (
+	alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+)
+
+var (
+	domainRegex = regexp.MustCompile(
+		`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`,
+	)
+	schemeRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.\-]*://`)
+)
 
 type Link struct {
 	OriginalURL string    `json:"original_url"`
@@ -30,58 +43,131 @@ type LinkResponse struct {
 }
 
 type Handler struct {
-	pool *pgxpool.Pool
+	pool       *pgxpool.Pool
+	linkPrefix string
 }
 
-func New(pool *pgxpool.Pool) *Handler {
-	return &Handler{pool: pool}
+func New(pool *pgxpool.Pool, linkPrefix string) *Handler {
+	return &Handler{pool: pool, linkPrefix: linkPrefix}
 }
 
-func (h *Handler) HandlerCreateShortenedLink(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
 	var link Link
 	if err := json.NewDecoder(r.Body).Decode(&link); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "недействительный JSON", http.StatusBadRequest)
 		return
 	}
 
-	link.OriginalURL = strings.TrimRight(link.OriginalURL, "/")
+	link.OriginalURL = strings.TrimSpace(link.OriginalURL)
 	if link.OriginalURL == "" {
 		http.Error(w, "original_url пуст", http.StatusBadRequest)
 		return
 	}
 
+	body := stripPrefix(link.OriginalURL)
+	if body == "" {
+		http.Error(w, "недействительный URL", http.StatusBadRequest)
+		return
+	}
+
+	host := body
+	if i := strings.IndexAny(host, "/?#"); i != -1 {
+		host = host[:i]
+	}
+	if !isValidHost(host) {
+		http.Error(w, "недействительный домен", http.StatusBadRequest)
+		return
+	}
+
+	link.OriginalURL = strings.TrimRight(link.OriginalURL, "/")
+	body = strings.TrimRight(body, "/")
+
 	ctx := r.Context()
 
 	exists, err := h.getByOriginalURL(ctx, link.OriginalURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
 		return
 	}
-
 	if exists != nil {
-		writeJSON(w, http.StatusOK, exists)
+		writeJSON(w, http.StatusOK, h.toResponse(exists))
 		return
 	}
 
-	code, err := h.createWithRetry(ctx, link.OriginalURL, 5)
+	code, err := h.createWithRetry(ctx, link.OriginalURL, body, 5)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
 		return
 	}
+
 	created, err := h.getByCode(ctx, code)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toResponse(created))
+	if created == nil {
+		log.Printf("сразу после вставки запись не найдена: %s", code)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, h.toResponse(created))
 }
 
-func (h *Handler) getByOriginalURL(ctx context.Context, url string) (*Link, error) {
+func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	ctx := r.Context()
+	link, err := h.getByCode(ctx, code)
+	if err != nil {
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+	if link == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	target := link.OriginalURL
+	if !schemeRegex.MatchString(target) {
+		target = "https://" + target
+	}
+
+	http.Redirect(w, r, target, http.StatusFound)
+}
+
+func stripPrefix(raw string) string {
+	s := raw
+	if loc := schemeRegex.FindStringIndex(s); loc != nil {
+		s = s[loc[1]:]
+	}
+	if len(s) >= 4 && strings.EqualFold(s[:4], "www.") {
+		s = s[4:]
+	}
+	return s
+}
+
+func isValidHost(host string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return domainRegex.MatchString(host)
+}
+
+func (h *Handler) getByOriginalURL(ctx context.Context, originalURL string) (*Link, error) {
 	var l Link
 	err := h.pool.QueryRow(ctx, `
         SELECT original_url, short_code, created_at
         FROM links WHERE original_url = $1
-    `, url).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
+    `, originalURL).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -99,15 +185,19 @@ func (h *Handler) getByCode(ctx context.Context, code string) (*Link, error) {
         FROM links
         WHERE short_code = $1
     `, code).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &l, nil
 }
 
-func (h *Handler) createWithRetry(ctx context.Context, url string, maxRetries int) (string, error) {
+func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
 	for i := 0; i < maxRetries; i++ {
-		code := generateShortCode()
+		code := generateShortCode([]byte(hashInput), i)
 
 		var inserted string
 		err := h.pool.QueryRow(ctx, `
@@ -115,7 +205,7 @@ func (h *Handler) createWithRetry(ctx context.Context, url string, maxRetries in
             VALUES ($1, $2)
             ON CONFLICT (short_code) DO NOTHING
             RETURNING short_code
-        `, code, url).Scan(&inserted)
+        `, code, originalURL).Scan(&inserted)
 
 		if err == nil {
 			return inserted, nil
@@ -128,11 +218,16 @@ func (h *Handler) createWithRetry(ctx context.Context, url string, maxRetries in
 	return "", errors.New("не удалось сгенерировать короткий код")
 }
 
-func generateShortCode() string {
-	const length = 7 // 62 - алфавит, 7 позиций => 62^7 комбинаций
-	b := make([]rune, length)
-	for i := range b {
-		b[i] = rune(alphabet[rand.Uint32N(uint32(len(alphabet)))])
+func generateShortCode(url []byte, salt int) string {
+	payload := append([]byte(nil), url...)
+	payload = binary.BigEndian.AppendUint32(payload, uint32(salt))
+
+	hash := sha256.Sum256(payload)
+
+	const length = 7
+	b := make([]byte, length)
+	for i := 0; i < length; i++ {
+		b[i] = alphabet[hash[i]%byte(len(alphabet))]
 	}
 	return string(b)
 }
@@ -145,10 +240,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-func toResponse(l *Link) LinkResponse {
+func (h *Handler) toResponse(l *Link) LinkResponse {
+	base, _ := url.Parse(h.linkPrefix)
+	base.Path = strings.TrimRight(base.Path, "/") + "/" + l.ShortCode
+
 	return LinkResponse{
 		OriginalURL: l.OriginalURL,
-		ShortURL:    linkPrefix + l.ShortCode,
+		ShortURL:    base.String(),
 		CreatedAt:   l.CreatedAt,
 	}
 }
