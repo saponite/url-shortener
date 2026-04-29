@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Сокращение ссылок</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .card {
+            background: #fff;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 480px;
+        }
+        h1 { margin: 0 0 20px; font-size: 20px; font-weight: 600; }
+        form { display: flex; gap: 8px; }
+        input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #d1d1d6;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+        }
+        input:focus { border-color: #0071e3; }
+        input::placeholder { color: #c7c7cc; }   /* светло-серый */
+        button {
+            padding: 10px 18px;
+            background: #0071e3;
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        button:disabled { background: #c7c7cc; cursor: not-allowed; }
+        .result {
+            margin-top: 18px;
+            padding: 12px 14px;
+            background: #f5f5f7;
+            border-radius: 8px;
+            font-size: 14px;
+            word-break: break-all;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result a { color: #0071e3; text-decoration: none; }
+        .result a:hover { text-decoration: underline; }
+        .result.error { color: #d70015; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Сокращение ссылки</h1>
+    <form id="form">
+        <input id="url" type="url" placeholder="Введите ссылку" required>
+        <button id="submit" type="submit">Сократить</button>
+    </form>
+    <div class="result" id="result"></div>
+</div>
+
+<script>
+    const form = document.getElementById('form');
+    const input = document.getElementById('url');
+    const btn = document.getElementById('submit');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btn.disabled = true;
+        result.className = 'result';
+        result.textContent = '';
+
+        try {
+            const res = await fetch('/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ original_url: input.value }),
+            });
+            const text = await res.text();
+            if (!res.ok) {
+                result.className = 'result show error';
+                result.textContent = text || 'Ошибка ' + res.status;
+                return;
+            }
+            const data = JSON.parse(text);
+            result.className = 'result show';
+            const a = document.createElement('a');
+            a.href = data.short_url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.textContent = data.short_url;
+            result.append('Готово: ', a);
+        } catch (err) {
+            result.className = 'result show error';
+            result.textContent = 'Ошибка сети: ' + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
