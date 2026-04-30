@@ -402,7 +402,7 @@ cloudflared tunnel --url http://localhost:1234  # в другом
 - [x] Docker Compose
 - [ ] Интерфейс `Storage` для разделения слоёв
 - [ ] Mock-тесты для хендлеров
-- [ ] Интеграционные тесты на testcontainers
+- [x] Интеграционные тесты на testcontainers
 
 [//]: # (- [ ] Метрики &#40;Prometheus&#41; и логирование &#40;slog&#41;)
 
