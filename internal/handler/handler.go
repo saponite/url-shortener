@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -43,12 +41,12 @@ type LinkResponse struct {
 }
 
 type Handler struct {
-	pool       *pgxpool.Pool
+	storage    Storage
 	linkPrefix string
 }
 
-func New(pool *pgxpool.Pool, linkPrefix string) *Handler {
-	return &Handler{pool: pool, linkPrefix: linkPrefix}
+func New(storage Storage, linkPrefix string) *Handler {
+	return &Handler{storage: storage, linkPrefix: linkPrefix}
 }
 
 func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +82,7 @@ func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	exists, err := h.getByOriginalURL(ctx, link.OriginalURL)
+	exists, err := h.storage.GetByOriginalURL(ctx, link.OriginalURL)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -102,7 +100,7 @@ func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.getByCode(ctx, code)
+	created, err := h.storage.GetByCode(ctx, code)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -125,7 +123,7 @@ func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	link, err := h.getByCode(ctx, code)
+	link, err := h.storage.GetByCode(ctx, code)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -144,6 +142,22 @@ func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
+func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
+	for i := 0; i < maxRetries; i++ {
+		code := generateShortCode([]byte(hashInput), i)
+
+		inserted, err := h.storage.Create(ctx, code, originalURL)
+		if err == nil {
+			return inserted, nil
+		}
+		if errors.Is(err, ErrCodeTaken) {
+			continue
+		}
+		return "", err
+	}
+	return "", errors.New("не удалось сгенерировать короткий код")
+}
+
 func stripPrefix(raw string) string {
 	s := raw
 	if loc := schemeRegex.FindStringIndex(s); loc != nil {
@@ -160,62 +174,6 @@ func isValidHost(host string) bool {
 		host = h
 	}
 	return domainRegex.MatchString(host)
-}
-
-func (h *Handler) getByOriginalURL(ctx context.Context, originalURL string) (*Link, error) {
-	var l Link
-	err := h.pool.QueryRow(ctx, `
-        SELECT original_url, short_code, created_at
-        FROM links WHERE original_url = $1
-    `, originalURL).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &l, nil
-}
-
-func (h *Handler) getByCode(ctx context.Context, code string) (*Link, error) {
-	var l Link
-	err := h.pool.QueryRow(ctx, `
-        SELECT original_url, short_code, created_at
-        FROM links
-        WHERE short_code = $1
-    `, code).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &l, nil
-}
-
-func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
-	for i := 0; i < maxRetries; i++ {
-		code := generateShortCode([]byte(hashInput), i)
-
-		var inserted string
-		err := h.pool.QueryRow(ctx, `
-            INSERT INTO links (short_code, original_url)
-            VALUES ($1, $2)
-            ON CONFLICT (short_code) DO NOTHING
-            RETURNING short_code
-        `, code, originalURL).Scan(&inserted)
-
-		if err == nil {
-			return inserted, nil
-		}
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		return "", err
-	}
-	return "", errors.New("не удалось сгенерировать короткий код")
 }
 
 func generateShortCode(url []byte, salt int) string {
