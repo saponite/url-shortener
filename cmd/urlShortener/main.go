@@ -28,7 +28,8 @@ func main() {
 
 	router := chi.NewRouter()
 
-	h := handler.New(pool, os.Getenv("LINK_PREFIX"))
+	storage := handler.NewPGStorage(pool)
+	h := handler.New(storage, os.Getenv("LINK_PREFIX"))
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/index.html")
 	})
