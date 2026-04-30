@@ -1,11 +1,100 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // go test -run handler_test.go
+
+type mockStorage struct {
+	getByOriginalURLFunc func(ctx context.Context, url string) (*Link, error)
+	getByCodeFunc        func(ctx context.Context, code string) (*Link, error)
+	createFunc           func(ctx context.Context, code, url string) (string, error)
+}
+
+func (m *mockStorage) GetByOriginalURL(ctx context.Context, url string) (*Link, error) {
+	return m.getByOriginalURLFunc(ctx, url)
+}
+
+func (m *mockStorage) GetByCode(ctx context.Context, code string) (*Link, error) {
+	return m.getByCodeFunc(ctx, code)
+}
+
+func (m *mockStorage) Create(ctx context.Context, code, url string) (string, error) {
+	return m.createFunc(ctx, code, url)
+}
+
+func TestCreateDuplicateURLReturnsExisting(t *testing.T) {
+	existing := &Link{
+		OriginalURL: "https://github.com",
+		ShortCode:   "abc1234",
+		CreatedAt:   time.Now(),
+	}
+
+	storage := &mockStorage{
+		getByOriginalURLFunc: func(ctx context.Context, url string) (*Link, error) {
+			return existing, nil
+		},
+	}
+
+	h := New(storage, "http://test/")
+
+	body := strings.NewReader(`{"original_url": "https://github.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/create", body)
+	w := httptest.NewRecorder()
+
+	h.CreateShortenedLink(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("дубль должен возвращать 200, получили %d", w.Code)
+	}
+
+	var resp LinkResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.ShortURL != "http://test/abc1234" {
+		t.Errorf("ShortURL = %q, ожидалось http://test/abc1234", resp.ShortURL)
+	}
+}
+
+func TestCreateStorageErrorReturns500(t *testing.T) {
+	storage := &mockStorage{
+		getByOriginalURLFunc: func(ctx context.Context, url string) (*Link, error) {
+			return nil, errors.New("connection refused")
+		},
+	}
+
+	h := New(storage, "http://test/")
+
+	body := strings.NewReader(`{"original_url": "https://github.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/create", body)
+	w := httptest.NewRecorder()
+	h.CreateShortenedLink(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("ожидался 500, получили %d", w.Code)
+	}
+}
+
+func TestCreateInvalidURLReturns400(t *testing.T) {
+	h := New(&mockStorage{}, "http://test/")
+
+	body := strings.NewReader(`{"original_url": "не урл вовсе"}`)
+	req := httptest.NewRequest(http.MethodPost, "/create", body)
+	w := httptest.NewRecorder()
+	h.CreateShortenedLink(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ожидался 400, получили %d", w.Code)
+	}
+}
+
 func TestStripPrefix(t *testing.T) {
 	tests := []struct {
 		name string
