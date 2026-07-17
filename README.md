@@ -158,7 +158,7 @@ go run ./cmd/url-shortener
 
 или
 ```bash
-go run cmd/urlShortener/main.go 
+go run cmd/url-shortener/main.go 
 ```
 
 Если запуск произошел успешно, то будет выведена следующая информация:

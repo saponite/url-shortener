@@ -1,21 +1,44 @@
 services:
   postgres:
     image: postgres:16
-    container_name: shortener-pg
+    container_name: url-shortener-container-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 12345
-      POSTGRES_DB: url_shortener
+      POSTGRES_DB: url-shortener-postgres-db
     ports:
       - "5432:5432"
     volumes:
-      - shortener-data:/var/lib/postgresql/data
+      - url_shortener-postgres-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d url_shortener"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d url-shortener-postgres-db" ]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - db-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: FINAL
+    image: url-shortener-backend
+    ports:
+      - "1234:8000"
+    restart: unless-stopped
+    networks:
+      - db-net
+      - shared-net
 
 volumes:
-  shortener-data:
+  url_shortener-postgres-db:
+    name: url-shortener-postgres-db
+
+networks:
+  db-net:
+    driver: bridge
+  shared-net:
+    driver: bridge
+    name: shared-network
