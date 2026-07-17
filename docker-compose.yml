@@ -32,7 +32,7 @@ services:
       DB_HOST: postgres
       DB_PORT: ${DB_PORT}
       DB_NAME: ${POSTGRES_DB}
-      LINK_PREFIX: https://${DOMAIN}/
+      LINK_PREFIX: https://${URL_SHORTENER_SERVICE}/
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,9 +46,13 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    environment:
+      URL_SHORTENER_SERVICE: ${URL_SHORTENER_SERVICE}
+      BASE_DOMAIN: ${BASE_DOMAIN}
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./web:/usr/share/nginx/html:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./web:/usr/share/nginx/html/app:ro
+      - ./web-default:/usr/share/nginx/html/default:ro
     depends_on:
       - backend
     networks:

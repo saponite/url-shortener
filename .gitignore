@@ -194,3 +194,4 @@ Temporary Items
 .apdisk
 .idea/
 .env
+nginx/conf.d/
