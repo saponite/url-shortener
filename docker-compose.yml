@@ -10,7 +10,7 @@ services:
     volumes:
       - url_shortener-postgres-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -41,7 +41,9 @@ services:
       - shared-net
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
     container_name: url-shortener-nginx
     restart: unless-stopped
     expose:
@@ -49,10 +51,6 @@ services:
     environment:
       URL_SHORTENER_SERVICE: ${URL_SHORTENER_SERVICE}
       BASE_DOMAIN: ${BASE_DOMAIN}
-    volumes:
-      - ./nginx/templates:/etc/nginx/templates:ro
-      - ./web:/usr/share/nginx/html/app:ro
-      - ./web-default:/usr/share/nginx/html/default:ro
     depends_on:
       - backend
     networks:
