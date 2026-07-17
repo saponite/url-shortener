@@ -4,15 +4,13 @@ services:
     container_name: url-shortener-container-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345
-      POSTGRES_DB: url-shortener-postgres-db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - url_shortener-postgres-db:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d url-shortener-postgres-db" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -23,13 +21,37 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: FINAL
+      target: final
     image: url-shortener-backend
-    ports:
-      - "1234:8000"
+    container_name: url-shortener-backend
     restart: unless-stopped
+    environment:
+      DB: ${DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${POSTGRES_DB}
+      LINK_PREFIX: https://${DOMAIN}/
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - db-net
+      - shared-net
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: url-shortener-nginx
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./web:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    networks:
       - shared-net
 
 volumes:

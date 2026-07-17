@@ -118,11 +118,11 @@ cp .env.example .env
 
 ```env
 DB=postgres
-DB_USER=postgres
-DB_PASSWORD=12345
+DB_USER=<your-user>
+DB_PASSWORD=<your-password>
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=url_shortener
+DB_NAME=<your-db-name>
 LINK_PREFIX=http://localhost:1234/
 ```
 
@@ -145,7 +145,7 @@ docker compose logs -f postgres
 
 ```bash
 goose -dir migrations postgres \
-  "postgres://postgres:12345@localhost:5432/url_shortener?sslmode=disable" up
+  "postgres://<user>:<password>@localhost:5432/<db_name>?sslmode=disable" up
 ```
 
 Если миграция применена, то будет выведено `OK`.
@@ -194,11 +194,11 @@ curl -X POST http://localhost:1234/create \
 | Переменная     | Назначение                                      | Пример                            |
 | -------------- |-------------------------------------------------| --------------------------------- |
 | `DB`           | Драйвер БД (схема DSN).                         | `postgres`                        |
-| `DB_USER`      | Пользователь БД.                                | `postgres`                        |
-| `DB_PASSWORD`  | Пароль.                                         | `12345`                           |
+| `DB_USER`      | Пользователь БД.                                | `<your-user>`                     |
+| `DB_PASSWORD`  | Пароль.                                         | `<your-password>`                 |
 | `DB_HOST`      | Хост БД.                                        | `localhost` (вне compose)         |
 | `DB_PORT`      | Порт БД.                                        | `5432`                            |
-| `DB_NAME`      | Имя БД.                                         | `url_shortener`                   |
+| `DB_NAME`      | Имя БД.                                         | `<your-db-name>`                  |
 | `LINK_PREFIX`  | Префикс, добавляемый к короткому коду в ответе. | `http://localhost:1234/`          |
 
 > Внутри `docker-compose` сервис обращается к Postgres по имени сервиса. То есть `DB_HOST=postgres`, не `localhost`. Для запуска Go-сервиса вне compose — `DB_HOST=localhost`.
