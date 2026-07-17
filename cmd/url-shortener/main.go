@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/saponite/url-shortner/internal/handler"
@@ -25,6 +28,28 @@ func main() {
 		log.Fatalf("ошибка подключения к БД: %v", err)
 	}
 	defer pool.Close()
+
+	m, err := migrate.New(
+		"file://migrations",
+		connectString,
+	)
+	if err != nil {
+		log.Fatalf("не удалось инициализировать экземпляр миграций: %v", err)
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		log.Fatalf("ошибка применения миграций: %v", err)
+	}
+
+	sourceError, databaseError := m.Close()
+	if sourceError != nil {
+		log.Fatal("миграция не закрыта: ", sourceError)
+	}
+	if databaseError != nil {
+		log.Fatal("миграция не закрыта: ", databaseError)
+	}
+
+	log.Println("миграции базы данных успешно проверены/применены")
 
 	router := chi.NewRouter()
 

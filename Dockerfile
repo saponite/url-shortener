@@ -20,5 +20,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 COPY --from=BUILD /build/backend .
+COPY --from=BUILD /build/migrations /app/migrations
 
 CMD ["./backend"]
