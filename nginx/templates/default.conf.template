@@ -21,15 +21,3 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-
-server {
-    listen 80 default_server;
-    server_name ${BASE_DOMAIN};
-
-    root /usr/share/nginx/html/default;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ =404;
-    }
-}
