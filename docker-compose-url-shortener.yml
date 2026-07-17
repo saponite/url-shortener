@@ -10,7 +10,7 @@ services:
     volumes:
       - url_shortener-postgres-db:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: final
+      target: FINAL
     image: url-shortener-backend
     container_name: url-shortener-backend
     restart: unless-stopped

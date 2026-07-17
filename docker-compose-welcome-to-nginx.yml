@@ -1,0 +1,7 @@
+services:
+  nginx-default:
+    image: nginx:1.27-alpine
+    container_name: url-shortener-nginx-default
+    restart: unless-stopped
+    expose:
+      - "80"
