@@ -162,20 +162,28 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domains := map[string]struct{}{
+	domainsRU := map[string]struct{}{
 		"yandex.ru":   {},
 		"mail.ru":     {},
-		"gmail.com":   {},
 		"internet.ru": {},
 		"bk.ru":       {},
 		"list.ru":     {},
 		"inbox.ru":    {},
-		"icloud.com":  {},
+	}
+
+	nonRUDomains := map[string]struct{}{
+		"gmail.com":  {},
+		"icloud.com": {},
 	}
 
 	pos := strings.Index(user.Email, "@")
 	domain := user.Email[pos+1:]
-	if _, found := domains[domain]; !found {
+	if _, found := nonRUDomains[domain]; found {
+		http.Error(w, "домен эл.почты иностранного происхождения не поддерживается", http.StatusBadRequest)
+		return
+	}
+
+	if _, found := domainsRU[domain]; !found {
 		http.Error(w, "такой домен эл.почты не поддерживается", http.StatusBadRequest)
 		return
 	}
