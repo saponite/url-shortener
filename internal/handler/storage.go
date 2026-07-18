@@ -35,7 +35,7 @@ func (s *PgStorage) GetByOriginalURL(ctx context.Context, originalURL string) (*
 	var l Link
 	err := s.pool.QueryRow(ctx, `
         SELECT original_url, short_code, created_at
-        FROM links WHERE original_url = $1
+        FROM short_links WHERE original_url = $1
     `, originalURL).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -51,7 +51,7 @@ func (s *PgStorage) GetByCode(ctx context.Context, code string) (*Link, error) {
 	var l Link
 	err := s.pool.QueryRow(ctx, `
         SELECT original_url, short_code, created_at
-        FROM links
+        FROM short_links
         WHERE short_code = $1
     `, code).Scan(&l.OriginalURL, &l.ShortCode, &l.CreatedAt)
 
@@ -67,7 +67,7 @@ func (s *PgStorage) GetByCode(ctx context.Context, code string) (*Link, error) {
 func (s *PgStorage) CreateNewShortLink(ctx context.Context, code, url string) (string, error) {
 	var inserted string
 	err := s.pool.QueryRow(ctx, `
-        INSERT INTO links (short_code, original_url)
+        INSERT INTO short_links (short_code, original_url)
         VALUES ($1, $2)
         ON CONFLICT (short_code) DO NOTHING
         RETURNING short_code
