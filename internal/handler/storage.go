@@ -13,14 +13,22 @@ import (
 )
 
 var (
-	ErrCodeTaken    = errors.New("short_code уже занят")
-	ErrUserNotFound = errors.New("пользователя с таким email не существует")
+	ErrCodeTaken         = errors.New("short_code уже занят")
+	ErrUserNotFound      = errors.New("пользователя с таким email не существует")
+	ErrUserAlreadyExists = errors.New("аккаунт с таким email уже существует")
 )
 
 type LinkStorage interface {
 	GetByOriginalURL(ctx context.Context, url string) (*Link, error)
 	GetByCode(ctx context.Context, code string) (*Link, error)
 	CreateNewShortLink(ctx context.Context, code, url string) (string, error)
+}
+
+type UserStorage interface {
+	CreateNewUserAccount(ctx context.Context, firstName, lastName, email, password string) error
+	UpdatePassword(ctx context.Context, email, password string) error
+	UpdateFirstNameAndLastName(ctx context.Context, userId uuid.UUID, firstName, lastName string) error
+	UpdateEmail(ctx context.Context, userId uuid.UUID, email string) error
 }
 
 type PgStorage struct {
@@ -83,19 +91,17 @@ func (s *PgStorage) CreateNewShortLink(ctx context.Context, code, url string) (s
 }
 
 func (s *PgStorage) CreateNewUserAccount(ctx context.Context, firstName, lastName, email, password string) error {
-	// Exec, так как не делаем returning
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO users (first_name, last_name, email, password)
-		VALUES ($1, $2, $3, $4)
-	`, firstName, lastName, email, password)
+        INSERT INTO users (first_name, last_name, email, password)
+        VALUES ($1, $2, $3, $4)
+    `, firstName, lastName, email, password)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == pgerrcode.UniqueViolation {
-				return fmt.Errorf("аккаунт с email %s существует: %w", email, err)
-			}
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return fmt.Errorf("%w: %s", ErrUserAlreadyExists, email)
 		}
+		return fmt.Errorf("создание пользователя: %w", err)
 	}
 
 	return nil

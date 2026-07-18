@@ -41,12 +41,20 @@ type LinkResponse struct {
 }
 
 type Handler struct {
-	storage    LinkStorage
-	linkPrefix string
+	linkStorage LinkStorage
+	userStorage UserStorage
+	linkPrefix  string
+}
+
+type User struct {
+	LastName  string `json:"last_name"`
+	FirstName string `json:"first_name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
 }
 
 func New(storage LinkStorage, linkPrefix string) *Handler {
-	return &Handler{storage: storage, linkPrefix: linkPrefix}
+	return &Handler{linkStorage: storage, linkPrefix: linkPrefix}
 }
 
 func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +90,7 @@ func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	exists, err := h.storage.GetByOriginalURL(ctx, link.OriginalURL)
+	exists, err := h.linkStorage.GetByOriginalURL(ctx, link.OriginalURL)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -100,7 +108,7 @@ func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.storage.GetByCode(ctx, code)
+	created, err := h.linkStorage.GetByCode(ctx, code)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -123,7 +131,7 @@ func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	link, err := h.storage.GetByCode(ctx, code)
+	link, err := h.linkStorage.GetByCode(ctx, code)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
@@ -142,11 +150,52 @@ func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
+func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
+	var user User
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		http.Error(w, "недействительный JSON", http.StatusBadRequest)
+		return
+	}
+
+	domains := map[string]struct{}{
+		"yandex.ru":   {},
+		"mail.ru":     {},
+		"gmail.com":   {},
+		"internet.ru": {},
+		"bk.ru":       {},
+		"list.ru":     {},
+		"inbox.ru":    {},
+		"icloud.com":  {},
+	}
+
+	pos := strings.Index(user.Email, "@")
+	domain := user.Email[pos+1:]
+	if _, found := domains[domain]; !found {
+		http.Error(w, "такой домен эл.почты не поддерживается", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	err := h.userStorage.CreateNewUserAccount(ctx, user.FirstName, user.LastName, user.Email, user.Password)
+	if err != nil {
+		log.Printf("ошибка БД: %v", err)
+		if errors.Is(err, ErrUserAlreadyExists) {
+			http.Error(w, "пользователь с таким email существует", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, "пользователь зарегистрирован")
+}
+
 func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
 	for i := 0; i < maxRetries; i++ {
 		code := generateShortCode([]byte(hashInput), i)
 
-		inserted, err := h.storage.CreateNewShortLink(ctx, code, originalURL)
+		inserted, err := h.linkStorage.CreateNewShortLink(ctx, code, originalURL)
 		if err == nil {
 			return inserted, nil
 		}
