@@ -169,6 +169,7 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 		"bk.ru":       {},
 		"list.ru":     {},
 		"inbox.ru":    {},
+		"ya.ru":       {},
 	}
 
 	nonRUDomains := map[string]struct{}{
