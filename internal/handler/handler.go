@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/saponite/url-shortner/internal/crypto"
 )
 
 const (
@@ -179,9 +180,16 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hashedPassword, err := crypto.HashPassword(user.Password)
+	if err != nil {
+		log.Printf("ошибка получения хешированного пароля: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 
-	err := h.userStorage.CreateNewUserAccount(ctx, user.FirstName, user.LastName, user.Email, user.Password)
+	err = h.userStorage.CreateNewUserAccount(ctx, user.FirstName, user.LastName, user.Email, hashedPassword)
 	if err != nil {
 		log.Printf("ошибка БД: %v", err)
 		if errors.Is(err, ErrUserAlreadyExists) {
