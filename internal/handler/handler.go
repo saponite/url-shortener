@@ -53,8 +53,12 @@ type User struct {
 	Password  string `json:"password"`
 }
 
-func New(storage LinkStorage, linkPrefix string) *Handler {
-	return &Handler{linkStorage: storage, linkPrefix: linkPrefix}
+func New(storage *PgStorage, linkPrefix string) *Handler {
+	return &Handler{
+		linkStorage: storage,
+		userStorage: storage,
+		linkPrefix:  linkPrefix,
+	}
 }
 
 func (h *Handler) CreateShortenedLink(w http.ResponseWriter, r *http.Request) {
