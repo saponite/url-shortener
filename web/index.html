@@ -170,8 +170,17 @@
     <div class="panel active" id="panelRegister">
         <form id="registerForm" class="stacked">
             <div class="field-group">
-                <label class="field-label" for="regUsername">Имя пользователя</label>
-                <input id="regUsername" type="text" placeholder="Введите имя пользователя" required autocomplete="username">
+                <label class="field-label" for="regFirstName">Имя</label>
+                <input id="regFirstName" type="text" placeholder="Введите имя" required autocomplete="given-name">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="regLastName">Фамилия</label>
+                <input id="regLastName" type="text" placeholder="Введите фамилию" required autocomplete="family-name">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="regEmail">Эл. почта</label>
+                <input id="regEmail" type="email" placeholder="Например, ivan@yandex.ru" required autocomplete="email">
+                <small style="display:block; margin-top:6px; font-size:12px; color:#98989d;">Поддерживаются: yandex.ru, mail.ru, internet.ru, bk.ru, list.ru, inbox.ru</small>
             </div>
             <div class="field-group">
                 <label class="field-label" for="regPassword">Пароль</label>
@@ -249,14 +258,21 @@
         registerResult.className = 'result';
         registerResult.textContent = '';
 
-        const username = document.getElementById('regUsername').value;
+        const firstName = document.getElementById('regFirstName').value.trim();
+        const lastName = document.getElementById('regLastName').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
         const password = document.getElementById('regPassword').value;
 
         try {
             const res = await fetch('/create_account', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email,
+                    password: password,
+                }),
             });
             const text = await res.text();
             if (!res.ok) {
@@ -264,8 +280,8 @@
                 registerResult.textContent = text || 'Ошибка ' + res.status;
                 return;
             }
-            // Успешная регистрация: запоминаем пользователя и переключаемся на сокращение ссылок
-            localStorage.setItem(STORAGE_KEY, username);
+            // Успешная регистрация: запоминаем пользователя (email) и переключаемся на сокращение ссылок
+            localStorage.setItem(STORAGE_KEY, email);
             renderAccountState();
         } catch (err) {
             registerResult.className = 'result show error';
