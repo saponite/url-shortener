@@ -24,7 +24,39 @@
             max-width: 480px;
         }
         h1 { margin: 0 0 20px; font-size: 20px; font-weight: 600; }
+
+        /* Вкладки */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: #f5f5f7;
+            padding: 4px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border: 0;
+            background: transparent;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6e6e73;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            background: #fff;
+            color: #1d1d1f;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .tab-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
         form { display: flex; gap: 8px; }
+        form.stacked { flex-direction: column; }
         input {
             flex: 1;
             padding: 10px 14px;
@@ -32,9 +64,11 @@
             border-radius: 8px;
             font-size: 15px;
             outline: none;
+            width: 100%;
         }
         input:focus { border-color: #0071e3; }
-        input::placeholder { color: #c7c7cc; }   /* светло-серый */
+        input::placeholder { color: #c7c7cc; }
+
         button {
             padding: 10px 18px;
             background: #0071e3;
@@ -45,6 +79,7 @@
             cursor: pointer;
         }
         button:disabled { background: #c7c7cc; cursor: not-allowed; }
+
         .result {
             margin-top: 18px;
             padding: 12px 14px;
@@ -58,19 +93,189 @@
         .result a { color: #0071e3; text-decoration: none; }
         .result a:hover { text-decoration: underline; }
         .result.error { color: #d70015; }
+
+        /* Статус аккаунта */
+        .account-bar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding: 10px 14px;
+            background: #eafaf0;
+            border: 1px solid #b8ecc9;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #1e6b3d;
+        }
+        .account-bar.show { display: flex; }
+        .account-bar .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34c759;
+            display: inline-block;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+        .account-bar .left { display: flex; align-items: center; }
+        .logout-link {
+            background: none;
+            border: 0;
+            color: #6e6e73;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 0;
+        }
+        .logout-link:hover { text-decoration: underline; }
+
+        .field-label {
+            display: block;
+            font-size: 13px;
+            color: #6e6e73;
+            margin-bottom: 6px;
+        }
+        .field-group { margin-bottom: 12px; }
+        .switch-hint {
+            margin-top: 14px;
+            font-size: 13px;
+            color: #6e6e73;
+            text-align: center;
+        }
+        .switch-hint button {
+            background: none;
+            border: 0;
+            color: #0071e3;
+            cursor: pointer;
+            padding: 0;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
 <div class="card">
-    <h1>Сокращение ссылки</h1>
-    <form id="form">
-        <input id="url" type="url" placeholder="Введите ссылку" required>
-        <button id="submit" type="submit">Сократить</button>
-    </form>
-    <div class="result" id="result"></div>
+    <h1>Сокращение ссылок</h1>
+
+    <div class="account-bar" id="accountBar">
+        <span class="left"><span class="dot"></span><span id="accountLabel"></span></span>
+        <button class="logout-link" id="logoutBtn" type="button">Выйти</button>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tabBtnRegister" type="button" data-tab="register">Регистрация</button>
+        <button class="tab-btn" id="tabBtnShorten" type="button" data-tab="shorten">Сокращение ссылок</button>
+    </div>
+
+    <!-- Вкладка регистрации -->
+    <div class="panel active" id="panelRegister">
+        <form id="registerForm" class="stacked">
+            <div class="field-group">
+                <label class="field-label" for="regUsername">Имя пользователя</label>
+                <input id="regUsername" type="text" placeholder="Введите имя пользователя" required autocomplete="username">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="regPassword">Пароль</label>
+                <input id="regPassword" type="password" placeholder="Введите пароль" required autocomplete="new-password">
+            </div>
+            <button id="registerSubmit" type="submit">Зарегистрироваться</button>
+        </form>
+        <div class="result" id="registerResult"></div>
+    </div>
+
+    <!-- Вкладка сокращения ссылок -->
+    <div class="panel" id="panelShorten">
+        <form id="form">
+            <input id="url" type="url" placeholder="Введите ссылку" required>
+            <button id="submit" type="submit">Сократить</button>
+        </form>
+        <div class="result" id="result"></div>
+    </div>
 </div>
 
 <script>
+    const STORAGE_KEY = 'shortener_account_username';
+
+    // ---------- Вкладки ----------
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const panels = {
+        register: document.getElementById('panelRegister'),
+        shorten: document.getElementById('panelShorten'),
+    };
+
+    function switchTab(name) {
+        tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
+        Object.entries(panels).forEach(([key, el]) => el.classList.toggle('active', key === name));
+    }
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    // ---------- Статус аккаунта ----------
+    const accountBar = document.getElementById('accountBar');
+    const accountLabel = document.getElementById('accountLabel');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const tabBtnRegister = document.getElementById('tabBtnRegister');
+
+    function renderAccountState() {
+        const username = localStorage.getItem(STORAGE_KEY);
+        if (username) {
+            accountBar.classList.add('show');
+            accountLabel.textContent = 'Вы вошли как ' + username;
+            tabBtnRegister.disabled = true;
+            switchTab('shorten');
+        } else {
+            accountBar.classList.remove('show');
+            tabBtnRegister.disabled = false;
+        }
+    }
+
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        renderAccountState();
+        switchTab('register');
+    });
+
+    renderAccountState();
+
+    // ---------- Форма регистрации ----------
+    const registerForm = document.getElementById('registerForm');
+    const registerSubmit = document.getElementById('registerSubmit');
+    const registerResult = document.getElementById('registerResult');
+
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        registerSubmit.disabled = true;
+        registerResult.className = 'result';
+        registerResult.textContent = '';
+
+        const username = document.getElementById('regUsername').value;
+        const password = document.getElementById('regPassword').value;
+
+        try {
+            const res = await fetch('/create_account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            const text = await res.text();
+            if (!res.ok) {
+                registerResult.className = 'result show error';
+                registerResult.textContent = text || 'Ошибка ' + res.status;
+                return;
+            }
+            // Успешная регистрация: запоминаем пользователя и переключаемся на сокращение ссылок
+            localStorage.setItem(STORAGE_KEY, username);
+            renderAccountState();
+        } catch (err) {
+            registerResult.className = 'result show error';
+            registerResult.textContent = 'Ошибка сети: ' + err.message;
+        } finally {
+            registerSubmit.disabled = false;
+        }
+    });
+
+    // ---------- Форма сокращения ссылок ----------
     const form = document.getElementById('form');
     const input = document.getElementById('url');
     const btn = document.getElementById('submit');
