@@ -41,11 +41,11 @@ type LinkResponse struct {
 }
 
 type Handler struct {
-	storage    Storage
+	storage    LinkStorage
 	linkPrefix string
 }
 
-func New(storage Storage, linkPrefix string) *Handler {
+func New(storage LinkStorage, linkPrefix string) *Handler {
 	return &Handler{storage: storage, linkPrefix: linkPrefix}
 }
 
