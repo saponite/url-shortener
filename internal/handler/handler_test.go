@@ -27,7 +27,7 @@ func (m *mockStorage) GetByCode(ctx context.Context, code string) (*Link, error)
 	return m.getByCodeFunc(ctx, code)
 }
 
-func (m *mockStorage) Create(ctx context.Context, code, url string) (string, error) {
+func (m *mockStorage) CreateNewShortLink(ctx context.Context, code, url string) (string, error) {
 	return m.createFunc(ctx, code, url)
 }
 

@@ -13,7 +13,7 @@ var ErrCodeTaken = errors.New("short_code уже занят")
 type Storage interface {
 	GetByOriginalURL(ctx context.Context, url string) (*Link, error)
 	GetByCode(ctx context.Context, code string) (*Link, error)
-	Create(ctx context.Context, code, url string) (string, error)
+	CreateNewShortLink(ctx context.Context, code, url string) (string, error)
 }
 
 type PgStorage struct {
@@ -57,7 +57,7 @@ func (s *PgStorage) GetByCode(ctx context.Context, code string) (*Link, error) {
 	return &l, nil
 }
 
-func (s *PgStorage) Create(ctx context.Context, code, url string) (string, error) {
+func (s *PgStorage) CreateNewShortLink(ctx context.Context, code, url string) (string, error) {
 	var inserted string
 	err := s.pool.QueryRow(ctx, `
         INSERT INTO links (short_code, original_url)

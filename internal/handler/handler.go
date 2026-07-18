@@ -146,7 +146,7 @@ func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput st
 	for i := 0; i < maxRetries; i++ {
 		code := generateShortCode([]byte(hashInput), i)
 
-		inserted, err := h.storage.Create(ctx, code, originalURL)
+		inserted, err := h.storage.CreateNewShortLink(ctx, code, originalURL)
 		if err == nil {
 			return inserted, nil
 		}
