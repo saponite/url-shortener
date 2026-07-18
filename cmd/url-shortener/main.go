@@ -44,7 +44,7 @@ func main() {
 	})
 	router.Post("/create", h.CreateShortenedLink)
 	router.Get("/{code}", h.GetOriginalURL)
-	router.Get("/create_account", h.CreateNewUserAccount)
+	router.Post("/create_account", h.CreateNewUserAccount)
 
 	fmt.Println("сервер запущен на :1234")
 	if err := http.ListenAndServe(":1234", router); err != nil {
