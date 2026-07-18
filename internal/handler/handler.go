@@ -177,6 +177,10 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pos := strings.Index(user.Email, "@")
+	if pos == 0 {
+		http.Error(w, "невалидный адрес эл.почты", http.StatusBadRequest)
+		return
+	}
 	domain := user.Email[pos+1:]
 	if _, found := nonRUDomains[domain]; found {
 		http.Error(w, "домен эл.почты иностранного происхождения не поддерживается", http.StatusBadRequest)
