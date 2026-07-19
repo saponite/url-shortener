@@ -138,6 +138,27 @@ func TestHashPassword_EmptyPasswordStillProducesHash(t *testing.T) {
 	}
 }
 
+func TestVerifyPassword_TamperedHashSegment(t *testing.T) {
+	hash, err := HashPassword("somePassword")
+	if err != nil {
+		t.Fatalf("неожиданная ошибка: %v", err)
+	}
+
+	// Подменяем сам хеш на валидный base64, но не тот. Формат корректен,
+	// ошибки разбора нет — но пароль не должен пройти проверку.
+	parts := strings.Split(hash, "$")
+	parts[3] = "AAAA"
+	tampered := strings.Join(parts, "$")
+
+	ok, err := VerifyPassword("somePassword", tampered)
+	if err != nil {
+		t.Fatalf("не ожидали ошибку разбора (base64 валиден): %v", err)
+	}
+	if ok {
+		t.Error("подменённый хеш не должен проходить проверку")
+	}
+}
+
 func TestHashPassword_UnicodePassword(t *testing.T) {
 	password := "пароль123!@#"
 
