@@ -24,32 +24,46 @@
 
         <header class="header">
             <h1 class="title">Сокращение ссылок</h1>
-            <button id="themeToggle" class="btn btn--icon" type="button"
-                    aria-label="Переключить тему" title="Переключить тему">
-                <svg class="icon theme-icon--sun" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                    <circle cx="12" cy="12" r="4"></circle>
-                    <path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-                </svg>
-                <svg class="icon theme-icon--moon" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
-                </svg>
-            </button>
+            <div class="header__actions">
+                <!-- Меню аккаунта (видно только залогиненному) -->
+                <div id="userMenu" class="user-menu is-hidden">
+                    <button id="userMenuBtn" class="user-menu__trigger" type="button"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="userMenuDropdown">
+                        <span id="userMenuName" class="user-menu__name truncate"></span>
+                        <svg class="icon user-menu__caret" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"></path>
+                        </svg>
+                    </button>
+                    <div id="userMenuDropdown" class="dropdown is-hidden" role="menu"
+                         aria-labelledby="userMenuBtn">
+                        <button class="dropdown__item" id="menuSettings" type="button" role="menuitem">
+                            Настройки
+                        </button>
+                        <button class="dropdown__item dropdown__item--danger" id="menuLogout" type="button" role="menuitem">
+                            Выйти
+                        </button>
+                    </div>
+                </div>
+
+                <button id="themeToggle" class="btn btn--icon" type="button"
+                        aria-label="Переключить тему" title="Переключить тему">
+                    <svg class="icon theme-icon--sun" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                    </svg>
+                    <svg class="icon theme-icon--moon" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+                    </svg>
+                </button>
+            </div>
         </header>
 
-        <!-- Статус аккаунта -->
-        <div id="accountBar" class="account-bar is-hidden">
-            <span class="account-bar__left">
-                <span class="account-bar__dot" aria-hidden="true"></span>
-                <span id="accountLabel" class="truncate"></span>
-            </span>
-            <button id="logoutBtn" class="btn btn--ghost" type="button">Выйти</button>
-        </div>
-
         <!-- Табы -->
-        <div class="tabs" role="tablist" aria-label="Разделы">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Разделы">
             <button class="tab" id="tabShorten" type="button" role="tab"
                     aria-selected="true" aria-controls="panelShorten">Сократить</button>
             <button class="tab" id="tabAuth" type="button" role="tab"
@@ -160,6 +174,44 @@
 
     <p class="footnote">Ссылки только с доменами рунета</p>
 </main>
+
+<!-- ── Модалка настроек ── -->
+<div id="settingsModal" class="modal is-hidden" role="dialog" aria-modal="true"
+     aria-labelledby="settingsTitle">
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__card" role="document">
+        <div class="modal__header">
+            <h2 id="settingsTitle" class="modal__title">Настройки</h2>
+            <button id="settingsClose" class="btn btn--icon" type="button"
+                    aria-label="Закрыть" data-close-modal>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"></path>
+                </svg>
+            </button>
+        </div>
+
+        <form id="updatePasswordForm" novalidate>
+            <h3 class="modal__section">Смена пароля</h3>
+            <div class="field">
+                <label class="label" for="newPassword">Новый пароль</label>
+                <input id="newPassword" class="input" type="password" placeholder="Минимум 8 символов"
+                       required autocomplete="new-password" aria-describedby="newPasswordError">
+                <p id="newPasswordError" class="error is-hidden" role="alert"></p>
+            </div>
+            <div class="field">
+                <label class="label" for="confirmPassword">Повторите пароль</label>
+                <input id="confirmPassword" class="input" type="password"
+                       required autocomplete="new-password" aria-describedby="confirmPasswordError">
+                <p id="confirmPasswordError" class="error is-hidden" role="alert"></p>
+            </div>
+            <button id="updatePasswordSubmit" class="btn btn--primary btn--block" type="submit">
+                <span data-label>Обновить пароль</span>
+            </button>
+            <p id="settingsResult" class="form-message is-hidden" role="alert"></p>
+        </form>
+    </div>
+</div>
 
 <!-- Тосты -->
 <div id="toaster" class="toast-wrap" aria-live="polite" aria-atomic="true"></div>

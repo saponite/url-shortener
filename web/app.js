@@ -1,6 +1,6 @@
 // Фронтенд url-shortener.
-// Строится против реально существующих эндпоинтов (/create, /create_account).
-// Логин/история/logout вынесены за чёткие «швы» (модули api + session) —
+// Строится против реально существующих эндпоинтов (/create, /create_account,
+// /update_password). Логин/история/logout вынесены за швы (api + session) —
 // когда на бэке появятся /login, /me, /logout, /links, фронт заработает без правок.
 
 // ──────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 const show = (el) => el && el.classList.remove("is-hidden");
 const hide = (el) => el && el.classList.add("is-hidden");
+const isShown = (el) => el && !el.classList.contains("is-hidden");
 
 // Разрешённые домены почты — зеркалим бэкенд (handler.go) для мгновенной валидации.
 const ALLOWED_EMAIL_DOMAINS = new Set([
@@ -33,8 +34,8 @@ function toast(message, kind = "info") {
 }
 
 // ──────────────────────────────────────────────────────────────
-// API-слой. Единая обработка ответа: сервер отдаёт ошибки то plain text
-// (http.Error), то JSON (writeJSON) — извлекаем сообщение из обоих.
+// API-слой. Ошибки приходят то plain text (http.Error), то JSON (writeJSON) —
+// извлекаем сообщение из обоих.
 // ──────────────────────────────────────────────────────────────
 class ApiError extends Error {
   constructor(message, status) {
@@ -71,6 +72,8 @@ const api = {
     request("/create", { method: "POST", body: { original_url: originalUrl } }),
   register: (user) =>
     request("/create_account", { method: "POST", body: user }),
+  updatePassword: (body) =>
+    request("/update_password", { method: "PATCH", body }),
   // ── Ждут бэкенда (контракт задокументирован в web/README-frontend.md) ──
   login: (creds) => request("/login", { method: "POST", body: creds }),
   logout: () => request("/logout", { method: "POST" }),
@@ -79,20 +82,27 @@ const api = {
 };
 
 // ──────────────────────────────────────────────────────────────
-// Сессия. Пока бэкенда логина нет — держим состояние в localStorage
-// (как в исходном фронте). Точка замены на cookie-сессию — ровно здесь:
-// заменить тело current() на api.me().
+// Сессия. Пока бэкенда логина нет — держим { email, firstName, lastName }
+// в localStorage. Точка замены на cookie-сессию — ровно здесь:
+// current() → await api.me().
 // ──────────────────────────────────────────────────────────────
-const SESSION_KEY = "shortener_account_email";
+const SESSION_KEY = "shortener_account";
 const session = {
-  current: () => localStorage.getItem(SESSION_KEY),
-  set: (email) => localStorage.setItem(SESSION_KEY, email),
-  clear: () => localStorage.removeItem(SESSION_KEY),
-  isAuthed: () => !!localStorage.getItem(SESSION_KEY),
+  current() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)) || null; }
+    catch { return null; }
+  },
+  set(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); },
+  clear() { localStorage.removeItem(SESSION_KEY); },
+  isAuthed() { return !!this.current(); },
 };
 
+function displayName(user) {
+  return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+}
+
 // ──────────────────────────────────────────────────────────────
-// Валидация полей: показ/скрытие ошибки + aria-invalid
+// Валидация полей
 // ──────────────────────────────────────────────────────────────
 function setError(input, errorEl, message) {
   if (message) {
@@ -182,7 +192,7 @@ async function copyText(text) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Табы (ARIA): верхние (Сократить/Аккаунт) и вложенные (Вход/Регистрация)
+// Табы (ARIA)
 // ──────────────────────────────────────────────────────────────
 function wireTabs(tabs) {
   const select = (name) => {
@@ -212,37 +222,87 @@ function init() {
     try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch {}
   });
 
-  // ── Верхние табы ──
+  // ── Табы ──
   const selectTop = wireTabs([
     { name: "shorten", btn: $("tabShorten"), panel: $("panelShorten") },
     { name: "auth", btn: $("tabAuth"), panel: $("panelAuth") },
   ]);
-
-  // ── Вложенные табы аккаунта ──
   wireTabs([
     { name: "login", btn: $("tabLogin"), panel: $("loginForm") },
     { name: "register", btn: $("tabRegister"), panel: $("registerForm") },
   ]);
 
+  // ── Меню аккаунта (дропдаун) ──
+  const userMenu = $("userMenu");
+  const menuTrigger = $("userMenuBtn");
+  const menuDropdown = $("userMenuDropdown");
+
+  function openUserMenu() {
+    show(menuDropdown);
+    menuTrigger.setAttribute("aria-expanded", "true");
+  }
+  function closeUserMenu() {
+    hide(menuDropdown);
+    menuTrigger.setAttribute("aria-expanded", "false");
+  }
+  on(menuTrigger, "click", (e) => {
+    e.stopPropagation();
+    isShown(menuDropdown) ? closeUserMenu() : openUserMenu();
+  });
+  document.addEventListener("click", (e) => {
+    if (!userMenu.contains(e.target)) closeUserMenu();
+  });
+
+  // ── Модалка настроек ──
+  const modal = $("settingsModal");
+  function openModal() {
+    show(modal);
+    document.body.style.overflow = "hidden";
+    $("newPassword").focus();
+  }
+  function closeModal() {
+    hide(modal);
+    document.body.style.overflow = "";
+  }
+  modal.querySelectorAll("[data-close-modal]").forEach((el) => on(el, "click", closeModal));
+
+  // Esc закрывает и меню, и модалку
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeUserMenu();
+      if (isShown(modal)) closeModal();
+    }
+  });
+
+  on($("menuSettings"), "click", () => {
+    closeUserMenu();
+    openModal();
+  });
+
   // ── Состояние аккаунта ──
   function renderAccount() {
-    const email = session.current();
-    if (email) {
-      $("accountLabel").textContent = "Вы вошли как " + email;
-      show($("accountBar"));
+    const user = session.current();
+    if (user) {
+      $("userMenuName").textContent = displayName(user);
+      show(userMenu);
+      hide($("tabs"));        // залогинен → раздел «Аккаунт» не нужен
+      selectTop("shorten");
       loadHistory();
     } else {
-      hide($("accountBar"));
+      closeUserMenu();
+      hide(userMenu);
+      show($("tabs"));
       hide($("historySection"));
     }
   }
 
-  on($("logoutBtn"), "click", async () => {
+  async function logout() {
     try { await api.logout(); } catch { /* бэкенда может не быть — не критично */ }
     session.clear();
     renderAccount();
     toast("Вы вышли", "info");
-  });
+  }
+  on($("menuLogout"), "click", logout);
 
   // ── Форма: сокращение ──
   const urlInput = $("url");
@@ -279,7 +339,7 @@ function init() {
     link.href = shortUrl;
     link.textContent = shortUrl;
     show($("result"));
-    $("result").focus({ preventScroll: false }); // перевод фокуса на результат
+    $("result").focus({ preventScroll: false });
     $("copyBtn").onclick = async () => {
       const ok = await copyText(shortUrl);
       toast(ok ? "Скопировано" : "Не удалось скопировать", ok ? "success" : "error");
@@ -301,10 +361,14 @@ function init() {
     withLoading(btn, true);
     hideMsg($("loginResult"));
     try {
-      await api.login({ email: email.value.trim(), password: pass.value });
-      session.set(email.value.trim());
+      const res = await api.login({ email: email.value.trim(), password: pass.value });
+      // Имя возьмём из ответа /me, когда он появится; пока — из ответа логина или email.
+      session.set({
+        email: email.value.trim(),
+        firstName: res?.first_name || "",
+        lastName: res?.last_name || "",
+      });
       renderAccount();
-      selectTop("shorten");
       toast("С возвращением!", "success");
     } catch (err) {
       showMsg($("loginResult"),
@@ -341,12 +405,47 @@ function init() {
         email: email.value.trim(),
         password: pass.value,
       });
-      session.set(email.value.trim());
+      session.set({
+        email: email.value.trim(),
+        firstName: first.value.trim(),
+        lastName: last.value.trim(),
+      });
       renderAccount();
-      selectTop("shorten");
       toast("Аккаунт создан", "success");
     } catch (err) {
       showMsg($("registerResult"), err.message || "Не удалось зарегистрироваться");
+    } finally {
+      withLoading(btn, false);
+    }
+  });
+
+  // ── Настройки: смена пароля ──
+  on($("updatePasswordForm"), "submit", async (e) => {
+    e.preventDefault();
+    const np = $("newPassword"), cp = $("confirmPassword");
+    const okNp = setError(np, $("newPasswordError"),
+      np.value.length >= MIN_PASSWORD_LEN ? null : `Минимум ${MIN_PASSWORD_LEN} символов`);
+    const okCp = setError(cp, $("confirmPasswordError"),
+      cp.value === np.value ? null : "Пароли не совпадают");
+    if (!okNp || !okCp) return;
+
+    const user = session.current();
+    if (!user) { closeModal(); return; }
+
+    const btn = $("updatePasswordSubmit");
+    if (btn.disabled) return;
+    withLoading(btn, true);
+    hideMsg($("settingsResult"));
+    try {
+      await api.updatePassword({ email: user.email, password: np.value });
+      np.value = "";
+      cp.value = "";
+      closeModal();
+      toast("Пароль обновлён", "success");
+    } catch (err) {
+      showMsg($("settingsResult"),
+        err.status === 404 ? "Смена пароля пока недоступна"
+          : (err.message || "Не удалось обновить пароль"));
     } finally {
       withLoading(btn, false);
     }
@@ -366,8 +465,7 @@ function init() {
       if (err.status === 404 || err.status === 501 || err.status === 401) {
         hide(section);
       } else {
-        body.innerHTML =
-          '<p class="history-empty">Не удалось загрузить историю</p>';
+        body.innerHTML = '<p class="history-empty">Не удалось загрузить историю</p>';
       }
     }
   }
