@@ -29,6 +29,14 @@ type UserStorage interface {
 	UpdatePassword(ctx context.Context, email, password string) error
 	UpdateFirstNameAndLastName(ctx context.Context, userId uuid.UUID, firstName, lastName string) error
 	UpdateEmail(ctx context.Context, userId uuid.UUID, email string) error
+	LoginInAccount(ctx context.Context, email string) (*User, error)
+}
+
+// Storage — всё, что нужно Handler целиком. *PgStorage реализует его,
+// а в тестах подменяется моком.
+type Storage interface {
+	LinkStorage
+	UserStorage
 }
 
 type PgStorage struct {
@@ -105,6 +113,27 @@ func (s *PgStorage) CreateNewUserAccount(ctx context.Context, firstName, lastNam
 	}
 
 	return nil
+}
+
+// LoginInAccount достаёт пользователя по email вместе с сохранённым хешем
+// пароля. Сверку пароля делает хендлер через crypto.VerifyPassword —
+// сравнивать argon2id-хеши напрямую в SQL нельзя (у каждого своя соль).
+func (s *PgStorage) LoginInAccount(ctx context.Context, email string) (*User, error) {
+	var u User
+	err := s.pool.QueryRow(ctx, `
+		select first_name, last_name, email, password
+		from users
+		where lower(email) = lower($1)
+	`, email).Scan(&u.FirstName, &u.LastName, &u.Email, &u.Password)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("получение пользователя: %w", err)
+	}
+
+	return &u, nil
 }
 
 func (s *PgStorage) UpdatePassword(ctx context.Context, email, password string) error {

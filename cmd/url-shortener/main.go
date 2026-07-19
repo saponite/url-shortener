@@ -53,6 +53,7 @@ func main() {
 	router.Get("/{code}", h.GetOriginalURL)
 	router.Post("/create_account", h.CreateNewUserAccount)
 	router.Patch("/update_password", h.UpdatePassword)
+	router.Post("/login", h.LoginInAccount)
 
 	fmt.Println("сервер запущен на :1234")
 	if err := http.ListenAndServe(":1234", router); err != nil {

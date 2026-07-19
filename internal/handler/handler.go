@@ -59,7 +59,7 @@ type UserEmailAndPassword struct {
 	Password string `json:"password"`
 }
 
-func New(storage *PgStorage, linkPrefix string) *Handler {
+func New(storage Storage, linkPrefix string) *Handler {
 	return &Handler{
 		linkStorage: storage,
 		userStorage: storage,
@@ -253,6 +253,56 @@ func (h *Handler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, "пароль успешно обновлён")
+}
+
+func (h *Handler) LoginInAccount(w http.ResponseWriter, r *http.Request) {
+	var creds UserEmailAndPassword
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		http.Error(w, "недействительный JSON", http.StatusBadRequest)
+		return
+	}
+
+	if creds.Email == "" || creds.Password == "" {
+		http.Error(w, "email и пароль обязательны", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Единый ответ и на «нет такого email», и на «неверный пароль» —
+	// чтобы нельзя было по ответу узнать, какие email зарегистрированы.
+	const invalidCreds = "неверный email или пароль"
+
+	// Достаём пользователя вместе с сохранённым хешем пароля.
+	user, err := h.userStorage.LoginInAccount(ctx, creds.Email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			http.Error(w, invalidCreds, http.StatusUnauthorized)
+			return
+		}
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+
+	// Пароль не хешируем заново (была бы новая соль) — VerifyPassword берёт
+	// соль из сохранённого хеша и пересчитывает.
+	ok, err := crypto.VerifyPassword(creds.Password, user.Password)
+	if err != nil {
+		log.Printf("ошибка проверки пароля: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, invalidCreds, http.StatusUnauthorized)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"email":      user.Email,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+	})
 }
 
 func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
