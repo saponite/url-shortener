@@ -8,6 +8,8 @@
 // ──────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
+const show = (el) => el && el.classList.remove("is-hidden");
+const hide = (el) => el && el.classList.add("is-hidden");
 
 // Разрешённые домены почты — зеркалим бэкенд (handler.go) для мгновенной валидации.
 const ALLOWED_EMAIL_DOMAINS = new Set([
@@ -20,17 +22,11 @@ const MIN_PASSWORD_LEN = 8;
 // ──────────────────────────────────────────────────────────────
 function toast(message, kind = "info") {
   const el = document.createElement("div");
-  const tone =
-    kind === "success" ? "border-success/40 text-success"
-    : kind === "error" ? "border-danger/40 text-danger"
-    : "border-border text-fg";
-  el.className =
-    "pointer-events-auto animate-fade-in rounded-xl border bg-elevated px-4 py-2.5 " +
-    "text-sm shadow-card " + tone;
+  el.className = "toast" + (kind === "success" ? " toast--success"
+    : kind === "error" ? " toast--error" : "");
   el.textContent = message;
   $("toaster").appendChild(el);
   setTimeout(() => {
-    el.style.transition = "opacity .2s ease-out";
     el.style.opacity = "0";
     setTimeout(() => el.remove(), 200);
   }, 2600);
@@ -40,6 +36,13 @@ function toast(message, kind = "info") {
 // API-слой. Единая обработка ответа: сервер отдаёт ошибки то plain text
 // (http.Error), то JSON (writeJSON) — извлекаем сообщение из обоих.
 // ──────────────────────────────────────────────────────────────
+class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function request(path, { method = "GET", body } = {}) {
   const res = await fetch(path, {
     method,
@@ -63,13 +66,6 @@ async function request(path, { method = "GET", body } = {}) {
   return data;
 }
 
-class ApiError extends Error {
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-}
-
 const api = {
   shorten: (originalUrl) =>
     request("/create", { method: "POST", body: { original_url: originalUrl } }),
@@ -85,7 +81,7 @@ const api = {
 // ──────────────────────────────────────────────────────────────
 // Сессия. Пока бэкенда логина нет — держим состояние в localStorage
 // (как в исходном фронте). Точка замены на cookie-сессию — ровно здесь:
-// заменить тело current()/на api.me() и refresh().
+// заменить тело current() на api.me().
 // ──────────────────────────────────────────────────────────────
 const SESSION_KEY = "shortener_account_email";
 const session = {
@@ -102,11 +98,11 @@ function setError(input, errorEl, message) {
   if (message) {
     input.setAttribute("aria-invalid", "true");
     errorEl.textContent = message;
-    errorEl.classList.remove("hidden");
+    show(errorEl);
   } else {
     input.removeAttribute("aria-invalid");
     errorEl.textContent = "";
-    errorEl.classList.add("hidden");
+    hide(errorEl);
   }
   return !message;
 }
@@ -145,11 +141,18 @@ function withLoading(button, busy) {
   const label = button.querySelector("[data-label]");
   if (busy) {
     button.disabled = true;
-    button.dataset.text = label ? label.textContent : "";
-    if (label) label.textContent = "…";
+    if (label) hide(label);
+    if (!button.querySelector(".spinner")) {
+      const s = document.createElement("span");
+      s.className = "spinner";
+      s.setAttribute("aria-hidden", "true");
+      button.appendChild(s);
+    }
   } else {
     button.disabled = false;
-    if (label && button.dataset.text != null) label.textContent = button.dataset.text;
+    const s = button.querySelector(".spinner");
+    if (s) s.remove();
+    if (label) show(label);
   }
 }
 
@@ -224,16 +227,13 @@ function init() {
   // ── Состояние аккаунта ──
   function renderAccount() {
     const email = session.current();
-    const bar = $("accountBar");
     if (email) {
-      bar.classList.remove("hidden");
-      bar.classList.add("flex");
       $("accountLabel").textContent = "Вы вошли как " + email;
+      show($("accountBar"));
       loadHistory();
     } else {
-      bar.classList.add("hidden");
-      bar.classList.remove("flex");
-      $("historySection").classList.add("hidden");
+      hide($("accountBar"));
+      hide($("historySection"));
     }
   }
 
@@ -275,13 +275,11 @@ function init() {
   });
 
   function showResult(shortUrl) {
-    const box = $("result");
     const link = $("resultLink");
     link.href = shortUrl;
     link.textContent = shortUrl;
-    box.classList.remove("hidden");
-    box.setAttribute("tabindex", "-1");
-    box.focus({ preventScroll: false }); // перевод фокуса на результат
+    show($("result"));
+    $("result").focus({ preventScroll: false }); // перевод фокуса на результат
     $("copyBtn").onclick = async () => {
       const ok = await copyText(shortUrl);
       toast(ok ? "Скопировано" : "Не удалось скопировать", ok ? "success" : "error");
@@ -358,20 +356,18 @@ function init() {
   async function loadHistory() {
     const section = $("historySection");
     const body = $("historyBody");
-    section.classList.remove("hidden");
-    body.innerHTML = skeletonRow();
+    show(section);
+    body.innerHTML = skeletonRows();
     try {
       const links = await api.links();
       renderHistory(body, Array.isArray(links) ? links : []);
     } catch (err) {
-      // Бэкенда истории ещё нет — деградируем тихо, без пугающих ошибок.
-      if (err.status === 404 || err.status === 501) {
-        section.classList.add("hidden");
-      } else if (err.status === 401) {
-        section.classList.add("hidden");
+      // Бэкенда истории ещё нет / не авторизованы — деградируем тихо.
+      if (err.status === 404 || err.status === 501 || err.status === 401) {
+        hide(section);
       } else {
         body.innerHTML =
-          '<p class="text-[13px] text-muted">Не удалось загрузить историю</p>';
+          '<p class="history-empty">Не удалось загрузить историю</p>';
       }
     }
   }
@@ -379,25 +375,21 @@ function init() {
   function renderHistory(body, links) {
     if (!links.length) {
       body.innerHTML =
-        '<p class="rounded-xl border border-border bg-elevated p-3.5 text-[13px] text-muted">' +
-        "Здесь появятся сокращённые вами ссылки</p>";
+        '<p class="history-empty">Здесь появятся сокращённые вами ссылки</p>';
       return;
     }
     body.innerHTML = "";
     for (const l of links) {
-      const row = document.createElement("div");
-      row.className =
-        "flex items-center gap-3 border-b border-border py-2.5 last:border-0";
       const short = l.short_url || l.short_code || "";
+      const row = document.createElement("div");
+      row.className = "history-item";
       row.innerHTML = `
-        <div class="min-w-0 flex-1">
-          <a href="${escapeAttr(short)}" target="_blank" rel="noopener"
-             class="block truncate text-[14px] font-medium text-accent hover:underline">${escapeHtml(short)}</a>
-          <p class="truncate text-[12px] text-faint">${escapeHtml(l.original_url || "")}</p>
+        <div class="history-item__main">
+          <a class="history-item__short" href="${escapeAttr(short)}" target="_blank" rel="noopener">${escapeHtml(short)}</a>
+          <p class="history-item__orig">${escapeHtml(l.original_url || "")}</p>
         </div>
-        <span class="shrink-0 text-[12px] text-muted">${(l.click_count ?? 0)} кл.</span>
-        <button class="btn-ghost h-8 min-h-0 shrink-0 rounded-lg border border-border px-2.5 text-[12px]"
-                type="button" data-copy="${escapeAttr(short)}">Копир.</button>`;
+        <span class="history-item__meta">${(l.click_count ?? 0)} кл.</span>
+        <button class="btn btn--outline" type="button" data-copy="${escapeAttr(short)}">Копир.</button>`;
       body.appendChild(row);
     }
     body.querySelectorAll("[data-copy]").forEach((b) =>
@@ -408,18 +400,19 @@ function init() {
     );
   }
 
-  function skeletonRow() {
-    return '<div class="animate-pulse space-y-2">' +
-      '<div class="h-4 w-2/3 rounded bg-border"></div>' +
-      '<div class="h-4 w-1/2 rounded bg-border"></div></div>';
+  function skeletonRows() {
+    return '<div class="skeleton">' +
+      '<div class="skeleton__line"></div>' +
+      '<div class="skeleton__line skeleton__line--2"></div>' +
+      '<div class="skeleton__line skeleton__line--3"></div></div>';
   }
 
   renderAccount();
 }
 
 // ── Мелкие утилиты ──
-function showMsg(el, text) { el.textContent = text; el.classList.remove("hidden"); }
-function hideMsg(el) { el.textContent = ""; el.classList.add("hidden"); }
+function showMsg(el, text) { el.textContent = text; show(el); }
+function hideMsg(el) { el.textContent = ""; hide(el); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

@@ -42,8 +42,14 @@ func main() {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/index.html")
 	})
-
-	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("web"))))
+	// Статика фронта отдаётся из корня (как это делает nginx из своего webroot).
+	// Литеральные пути chi матчит раньше catch-all "/{code}", так что коллизии нет.
+	router.Get("/styles.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/styles.css")
+	})
+	router.Get("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/app.js")
+	})
 	router.Post("/create", h.CreateShortenedLink)
 	router.Get("/{code}", h.GetOriginalURL)
 	router.Post("/create_account", h.CreateNewUserAccount)

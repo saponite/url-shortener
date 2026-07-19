@@ -1,96 +1,42 @@
 # Фронтенд
 
-Статический фронт: `index.html` + `app.js` (ES-модуль) + `styles.css` (собран Tailwind).
-Без `node_modules` и бандлеров — CSS собирается standalone-бинарём Tailwind.
+Статика без сборки и зависимостей: `index.html` + `app.js` (ES-модуль) + `styles.css`
+(рукописный CSS, без Tailwind). Ничего компилировать не нужно — правишь файл и деплоишь.
 
 ## Файлы
 
 | Файл | Назначение |
 |------|-----------|
-| `index.html` | Разметка. Ассеты подключены как `/static/styles.css`, `/static/app.js`. |
+| `index.html` | Разметка. Ассеты подключены из корня: `/styles.css`, `/app.js`. |
 | `app.js` | Логика: api / session / валидация / состояния / обработчики. |
-| `src/input.css` | **Источник** стилей: директивы Tailwind + дизайн-токены. Правим здесь. |
-| `styles.css` | **Сгенерированный** CSS. Не редактируем руками — коммитим результат сборки. |
-| `tailwind.config.js` | Конфиг Tailwind (content, darkMode: class, токены). |
+| `styles.css` | Дизайн-система на чистом CSS: токены (light/dark), компоненты, a11y. |
+| `src/input.css`, `tailwind.config.js` | ⚠️ Легаси от Tailwind-подхода, **больше не используются** — можно удалить. |
 
-## Сборка CSS
+Правишь стиль → меняешь `styles.css`. Меняешь разметку → держи имена классов в согласии с `styles.css`.
 
-Нужен standalone-бинарь Tailwind (без Node). Скачать один раз:
+## Как это отдаётся (важно!)
 
-```bash
-# macOS arm64 (пример; выбери свою платформу из релизов tailwindlabs/tailwindcss)
-curl -sL -o tailwindcss \
-  https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64
-chmod +x tailwindcss
-```
+В проде перед Go-бэкендом стоит **nginx** (`nginx/Dockerfile`, `nginx/templates/default.conf.template`):
 
-Собрать (из корня репозитория):
+- `COPY web /usr/share/nginx/html/app` — nginx кладёт папку `web/` в свой webroot;
+- `root .../app; location / { try_files $uri $uri/ @backend; }` — nginx сам отдаёт файлы из `web/`
+  (`/`, `/styles.css`, `/app.js`), а всё остальное (`/create`, `/{code}`, ...) проксирует в Go.
 
-```bash
-./tailwindcss -i web/src/input.css -o web/styles.css --minify
-```
+Поэтому ассеты подключаются **из корня** (`/styles.css`, `/app.js`), а не из `/static/` — именно так
+они лежат в webroot nginx. Раньше был баг: `index.html` ссылался на `/static/...`, которых в nginx
+нет → 404 → страница без стилей и без работающего JS.
 
-Во время разработки удобно с `--watch`:
-
-```bash
-./tailwindcss -i web/src/input.css -o web/styles.css --watch
-```
-
-> Если Node всё же есть и standalone-бинарь не нужен: `npx tailwindcss@3 -i web/src/input.css -o web/styles.css --minify`.
->
-> **Фолбэк без сборки:** заменить в `index.html` `<link rel="stylesheet" href="/static/styles.css">`
-> на `<script src="https://cdn.tailwindcss.com"></script>` — но токены из `src/input.css` тогда
-> не подхватятся, так что это только для быстрой локальной проверки, не для прода.
-
-## Отдача статики (backend, `cmd/url-shortener/main.go`)
-
-Сейчас сервер отдаёт только `web/index.html`. Нужно добавить отдачу статики под префиксом
-`/static/*` — **важно именно под префиксом**, потому что маршрут `GET /{code}` в chi перехватывает
-любой одиночный сегмент (`/styles.css`, `/app.js`) и без префикса ассеты не загрузятся.
-
-Рекомендуемый вариант — `embed.FS` (заодно чинит хрупкий относительный путь `"web/index.html"`,
-который ломается при запуске не из корня, например в Docker):
+Go-бэкенд (`cmd/url-shortener/main.go`) отдаёт те же файлы для прямого доступа на `:1234` (dev):
 
 ```go
-import (
-    "embed"
-    "io/fs"
-    "net/http"
-)
-
-//go:embed web
-var webFS embed.FS
-
-func main() {
-    // ...router := chi.NewRouter()...
-
-    staticFS, err := fs.Sub(webFS, "web")
-    if err != nil {
-        log.Fatal(err)
-    }
-    router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-
-    router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-        b, err := webFS.ReadFile("web/index.html")
-        if err != nil {
-            http.Error(w, "not found", http.StatusNotFound)
-            return
-        }
-        w.Header().Set("Content-Type", "text/html; charset=utf-8")
-        _, _ = w.Write(b)
-    })
-
-    // router.Post("/create", ...) — без изменений
-    // router.Get("/{code}", ...) — без изменений
-}
+router.Get("/", func(w, r) { http.ServeFile(w, r, "web/index.html") })
+router.Get("/styles.css", func(w, r) { http.ServeFile(w, r, "web/styles.css") })
+router.Get("/app.js", func(w, r) { http.ServeFile(w, r, "web/app.js") })
 ```
 
-Проще (без embed, читает с диска):
-
-```go
-router.Handle("/static/*", http.StripPrefix("/static/",
-    http.FileServer(http.Dir("web"))))
-```
+Литеральные роуты chi матчатся раньше catch-all `/{code}`, поэтому `/styles.css` не перехватывается
+редиректом. При прямом доступе на `:1234` рядом должна быть папка `web/` (она есть при запуске из
+репозитория; в Docker-образ бэкенда `web/` не копируется — там статику отдаёт nginx).
 
 ## Контракт эндпоинтов, которые ждёт фронт
 
@@ -115,6 +61,6 @@ router.Handle("/static/*", http.StripPrefix("/static/",
 
 В `app.js` модуль `session` сейчас читает `localStorage`. Когда появятся `/me` и `/logout`:
 1. `session.current()` → делать `await api.me()` и хранить результат;
-2. вызвать `session.refresh()` (добавить) в `init()` вместо `renderAccount()` напрямую.
+2. вызывать это при старте вместо чтения `localStorage`.
 
 Запросы уже шлются с `credentials: "same-origin"`, так что cookie поедут автоматически.
