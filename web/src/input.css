@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Дизайн-токены ─────────────────────────────────────────────
+   Цвета заданы как «R G B» (без rgb()) — так работает <alpha-value>
+   в tailwind.config.js. Светлая тема — по умолчанию, тёмная — .dark. */
+@layer base {
+  :root {
+    --bg: 245 245 247;
+    --surface: 255 255 255;
+    --elevated: 255 255 255;
+    --border: 224 224 229;
+    --fg: 29 29 31;
+    --muted: 110 110 115;
+    --faint: 152 152 157;
+    --accent: 0 113 227;
+    --accent-fg: 255 255 255;
+    --success: 30 107 61;
+    --danger: 200 30 45;
+  }
+
+  .dark {
+    --bg: 16 16 18;
+    --surface: 28 28 30;
+    --elevated: 38 38 41;
+    --border: 58 58 62;
+    --fg: 245 245 247;
+    --muted: 160 160 168;
+    --faint: 120 120 128;
+    --accent: 10 132 255;
+    --accent-fg: 255 255 255;
+    --success: 80 200 120;
+    --danger: 255 105 97;
+  }
+
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Единое видимое кольцо фокуса для всей клавиатурной навигации. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2;
+    --tw-ring-offset-color: rgb(var(--surface));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── Компоненты ────────────────────────────────────────────────
+   Мелкие переиспользуемые классы, чтобы разметка не превращалась
+   в стену утилит. */
+@layer components {
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2
+      rounded-xl px-4 text-[15px] font-medium
+      transition-[background-color,opacity,transform] duration-150 ease-out
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-fg hover:opacity-90 active:scale-[0.99];
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:text-fg;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-medium text-muted;
+  }
+  .input {
+    @apply min-h-[44px] w-full rounded-xl border border-border bg-surface
+      px-3.5 text-[15px] text-fg placeholder:text-faint
+      transition-colors duration-150
+      focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40;
+  }
+  .input[aria-invalid="true"] {
+    @apply border-danger focus:border-danger focus:ring-danger/40;
+  }
+  .field-error {
+    @apply mt-1.5 text-[13px] text-danger;
+  }
+
+  .tab {
+    @apply flex-1 rounded-lg px-3 py-2 text-sm font-medium text-muted
+      transition-colors duration-150
+      hover:text-fg disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .tab[aria-selected="true"] {
+    @apply bg-surface text-fg shadow-sm;
+  }
+}

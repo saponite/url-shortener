@@ -42,6 +42,8 @@ func main() {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/index.html")
 	})
+
+	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("web"))))
 	router.Post("/create", h.CreateShortenedLink)
 	router.Get("/{code}", h.GetOriginalURL)
 	router.Post("/create_account", h.CreateNewUserAccount)

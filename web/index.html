@@ -1,335 +1,175 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>Сокращение ссылок</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f5f5f7;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .card {
-            background: #fff;
-            padding: 32px;
-            border-radius: 12px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-            width: 100%;
-            max-width: 480px;
-        }
-        h1 { margin: 0 0 20px; font-size: 20px; font-weight: 600; }
-
-        /* Вкладки */
-        .tabs {
-            display: flex;
-            gap: 4px;
-            background: #f5f5f7;
-            padding: 4px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .tab-btn {
-            flex: 1;
-            padding: 8px 10px;
-            border: 0;
-            background: transparent;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #6e6e73;
-            cursor: pointer;
-        }
-        .tab-btn.active {
-            background: #fff;
-            color: #1d1d1f;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-        }
-        .tab-btn:disabled { cursor: not-allowed; opacity: 0.5; }
-
-        .panel { display: none; }
-        .panel.active { display: block; }
-
-        form { display: flex; gap: 8px; }
-        form.stacked { flex-direction: column; }
-        input {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid #d1d1d6;
-            border-radius: 8px;
-            font-size: 15px;
-            outline: none;
-            width: 100%;
-        }
-        input:focus { border-color: #0071e3; }
-        input::placeholder { color: #c7c7cc; }
-
-        button {
-            padding: 10px 18px;
-            background: #0071e3;
-            color: #fff;
-            border: 0;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
-        }
-        button:disabled { background: #c7c7cc; cursor: not-allowed; }
-
-        .result {
-            margin-top: 18px;
-            padding: 12px 14px;
-            background: #f5f5f7;
-            border-radius: 8px;
-            font-size: 14px;
-            word-break: break-all;
-            display: none;
-        }
-        .result.show { display: block; }
-        .result a { color: #0071e3; text-decoration: none; }
-        .result a:hover { text-decoration: underline; }
-        .result.error { color: #d70015; }
-
-        /* Статус аккаунта */
-        .account-bar {
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 16px;
-            padding: 10px 14px;
-            background: #eafaf0;
-            border: 1px solid #b8ecc9;
-            border-radius: 8px;
-            font-size: 13px;
-            color: #1e6b3d;
-        }
-        .account-bar.show { display: flex; }
-        .account-bar .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #34c759;
-            display: inline-block;
-            margin-right: 6px;
-            flex-shrink: 0;
-        }
-        .account-bar .left { display: flex; align-items: center; }
-        .logout-link {
-            background: none;
-            border: 0;
-            color: #6e6e73;
-            font-size: 13px;
-            cursor: pointer;
-            padding: 0;
-        }
-        .logout-link:hover { text-decoration: underline; }
-
-        .field-label {
-            display: block;
-            font-size: 13px;
-            color: #6e6e73;
-            margin-bottom: 6px;
-        }
-        .field-group { margin-bottom: 12px; }
-        .switch-hint {
-            margin-top: 14px;
-            font-size: 13px;
-            color: #6e6e73;
-            text-align: center;
-        }
-        .switch-hint button {
-            background: none;
-            border: 0;
-            color: #0071e3;
-            cursor: pointer;
-            padding: 0;
-            font-size: 13px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
+    <!-- Тему ставим до отрисовки — без вспышки светлой темы на тёмной. -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('theme');
+                var dark = t ? t === 'dark'
+                    : matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
 </head>
-<body>
-<div class="card">
-    <h1>Сокращение ссылок</h1>
+<body class="min-h-screen">
+<main class="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-8">
+    <div class="rounded-card border border-border bg-surface p-6 shadow-card sm:p-8">
 
-    <div class="account-bar" id="accountBar">
-        <span class="left"><span class="dot"></span><span id="accountLabel"></span></span>
-        <button class="logout-link" id="logoutBtn" type="button">Выйти</button>
+        <header class="mb-6 flex items-center justify-between gap-3">
+            <h1 class="text-xl font-semibold tracking-tight">Сокращение ссылок</h1>
+            <button id="themeToggle" class="btn-ghost h-10 min-h-0 w-10 rounded-lg px-0"
+                    type="button" aria-label="Переключить тему" title="Переключить тему">
+                <svg class="hidden h-5 w-5 dark:block" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                </svg>
+                <svg class="block h-5 w-5 dark:hidden" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Статус аккаунта -->
+        <div id="accountBar"
+             class="mb-5 hidden items-center justify-between gap-3 rounded-xl border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success">
+            <span class="flex items-center gap-2">
+                <span class="h-2 w-2 shrink-0 rounded-full bg-success" aria-hidden="true"></span>
+                <span id="accountLabel"></span>
+            </span>
+            <button id="logoutBtn" class="btn-ghost h-auto min-h-0 px-0 text-[13px]" type="button">Выйти</button>
+        </div>
+
+        <!-- Табы -->
+        <div class="mb-5 flex gap-1 rounded-xl bg-bg p-1" role="tablist" aria-label="Разделы">
+            <button class="tab" id="tabShorten" type="button" role="tab"
+                    aria-selected="true" aria-controls="panelShorten">Сократить</button>
+            <button class="tab" id="tabAuth" type="button" role="tab"
+                    aria-selected="false" aria-controls="panelAuth">Аккаунт</button>
+        </div>
+
+        <!-- ── Панель: сокращение ── -->
+        <section id="panelShorten" role="tabpanel" aria-labelledby="tabShorten" tabindex="-1">
+            <form id="shortenForm" novalidate>
+                <label class="field-label" for="url">Ссылка</label>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <input id="url" class="input" type="url" inputmode="url"
+                           placeholder="https://example.com/very/long/path" required
+                           autocomplete="off" aria-describedby="urlError">
+                    <button id="shortenSubmit" class="btn-primary shrink-0" type="submit">
+                        <span data-label>Сократить</span>
+                    </button>
+                </div>
+                <p id="urlError" class="field-error hidden" role="alert"></p>
+            </form>
+
+            <!-- Результат (место зарезервировано классами, без скачка layout) -->
+            <div id="result" class="mt-4 hidden animate-fade-in rounded-xl border border-border bg-elevated p-3.5">
+                <p class="mb-1 text-[13px] text-muted">Готово — короткая ссылка:</p>
+                <div class="flex items-center gap-2">
+                    <a id="resultLink" class="min-w-0 flex-1 truncate font-medium text-accent hover:underline"
+                       href="#" target="_blank" rel="noopener"></a>
+                    <button id="copyBtn" class="btn-ghost h-9 min-h-0 shrink-0 rounded-lg border border-border px-3 text-[13px]"
+                            type="button">Копировать</button>
+                </div>
+            </div>
+
+            <!-- История «Мои ссылки» — только для авторизованных -->
+            <section id="historySection" class="mt-6 hidden">
+                <h2 class="mb-2 text-sm font-semibold text-muted">Мои ссылки</h2>
+                <div id="historyBody" aria-live="polite"></div>
+            </section>
+        </section>
+
+        <!-- ── Панель: аккаунт ── -->
+        <section id="panelAuth" role="tabpanel" aria-labelledby="tabAuth" tabindex="-1" hidden>
+            <!-- Вложенные табы вход/регистрация -->
+            <div class="mb-4 flex gap-1 rounded-xl bg-bg p-1" role="tablist" aria-label="Вход или регистрация">
+                <button class="tab" id="tabLogin" type="button" role="tab"
+                        aria-selected="true" aria-controls="panelLogin">Вход</button>
+                <button class="tab" id="tabRegister" type="button" role="tab"
+                        aria-selected="false" aria-controls="panelRegister">Регистрация</button>
+            </div>
+
+            <!-- Вход -->
+            <form id="loginForm" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+                <div class="mb-3">
+                    <label class="field-label" for="loginEmail">Эл. почта</label>
+                    <input id="loginEmail" class="input" type="email" inputmode="email"
+                           placeholder="ivan@yandex.ru" required autocomplete="email"
+                           aria-describedby="loginEmailError">
+                    <p id="loginEmailError" class="field-error hidden" role="alert"></p>
+                </div>
+                <div class="mb-4">
+                    <label class="field-label" for="loginPassword">Пароль</label>
+                    <input id="loginPassword" class="input" type="password" required
+                           autocomplete="current-password" aria-describedby="loginPasswordError">
+                    <p id="loginPasswordError" class="field-error hidden" role="alert"></p>
+                </div>
+                <button id="loginSubmit" class="btn-primary w-full" type="submit">
+                    <span data-label>Войти</span>
+                </button>
+                <p id="loginResult" class="mt-3 hidden text-[13px] text-danger" role="alert"></p>
+            </form>
+
+            <!-- Регистрация -->
+            <form id="registerForm" role="tabpanel" aria-labelledby="tabRegister" novalidate hidden>
+                <div class="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="field-label" for="regFirstName">Имя</label>
+                        <input id="regFirstName" class="input" type="text" placeholder="Иван"
+                               required autocomplete="given-name" aria-describedby="regFirstNameError">
+                        <p id="regFirstNameError" class="field-error hidden" role="alert"></p>
+                    </div>
+                    <div>
+                        <label class="field-label" for="regLastName">Фамилия</label>
+                        <input id="regLastName" class="input" type="text" placeholder="Иванов"
+                               required autocomplete="family-name" aria-describedby="regLastNameError">
+                        <p id="regLastNameError" class="field-error hidden" role="alert"></p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="field-label" for="regEmail">Эл. почта</label>
+                    <input id="regEmail" class="input" type="email" inputmode="email"
+                           placeholder="ivan@yandex.ru" required autocomplete="email"
+                           aria-describedby="regEmailHint regEmailError">
+                    <p id="regEmailHint" class="mt-1.5 text-[12px] text-faint">
+                        Поддерживаются: yandex.ru, mail.ru, internet.ru, bk.ru, list.ru, inbox.ru, ya.ru
+                    </p>
+                    <p id="regEmailError" class="field-error hidden" role="alert"></p>
+                </div>
+                <div class="mb-4">
+                    <label class="field-label" for="regPassword">Пароль</label>
+                    <input id="regPassword" class="input" type="password" placeholder="Минимум 8 символов"
+                           required autocomplete="new-password" aria-describedby="regPasswordError">
+                    <p id="regPasswordError" class="field-error hidden" role="alert"></p>
+                </div>
+                <button id="registerSubmit" class="btn-primary w-full" type="submit">
+                    <span data-label>Зарегистрироваться</span>
+                </button>
+                <p id="registerResult" class="mt-3 hidden text-[13px] text-danger" role="alert"></p>
+            </form>
+        </section>
     </div>
 
-    <div class="tabs">
-        <button class="tab-btn active" id="tabBtnRegister" type="button" data-tab="register">Регистрация</button>
-        <button class="tab-btn" id="tabBtnShorten" type="button" data-tab="shorten">Сокращение ссылок</button>
-    </div>
+    <p class="mt-4 text-center text-[12px] text-faint">
+        Ссылки только с доменами рунета
+    </p>
+</main>
 
-    <!-- Вкладка регистрации -->
-    <div class="panel active" id="panelRegister">
-        <form id="registerForm" class="stacked">
-            <div class="field-group">
-                <label class="field-label" for="regFirstName">Имя</label>
-                <input id="regFirstName" type="text" placeholder="Введите имя" required autocomplete="given-name">
-            </div>
-            <div class="field-group">
-                <label class="field-label" for="regLastName">Фамилия</label>
-                <input id="regLastName" type="text" placeholder="Введите фамилию" required autocomplete="family-name">
-            </div>
-            <div class="field-group">
-                <label class="field-label" for="regEmail">Эл. почта</label>
-                <input id="regEmail" type="email" placeholder="Например, ivan@yandex.ru" required autocomplete="email">
-                <small style="display:block; margin-top:6px; font-size:12px; color:#98989d;">Поддерживаются: yandex.ru, mail.ru, internet.ru, bk.ru, list.ru, inbox.ru</small>
-            </div>
-            <div class="field-group">
-                <label class="field-label" for="regPassword">Пароль</label>
-                <input id="regPassword" type="password" placeholder="Введите пароль" required autocomplete="new-password">
-            </div>
-            <button id="registerSubmit" type="submit">Зарегистрироваться</button>
-        </form>
-        <div class="result" id="registerResult"></div>
-    </div>
+<!-- Тосты -->
+<div id="toaster" class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4"
+     aria-live="polite" aria-atomic="true"></div>
 
-    <!-- Вкладка сокращения ссылок -->
-    <div class="panel" id="panelShorten">
-        <form id="form">
-            <input id="url" type="url" placeholder="Введите ссылку" required>
-            <button id="submit" type="submit">Сократить</button>
-        </form>
-        <div class="result" id="result"></div>
-    </div>
-</div>
-
-<script>
-    const STORAGE_KEY = 'shortener_account_username';
-
-    // ---------- Вкладки ----------
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const panels = {
-        register: document.getElementById('panelRegister'),
-        shorten: document.getElementById('panelShorten'),
-    };
-
-    function switchTab(name) {
-        tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
-        Object.entries(panels).forEach(([key, el]) => el.classList.toggle('active', key === name));
-    }
-
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
-
-    // ---------- Статус аккаунта ----------
-    const accountBar = document.getElementById('accountBar');
-    const accountLabel = document.getElementById('accountLabel');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const tabBtnRegister = document.getElementById('tabBtnRegister');
-
-    function renderAccountState() {
-        const username = localStorage.getItem(STORAGE_KEY);
-        if (username) {
-            accountBar.classList.add('show');
-            accountLabel.textContent = 'Вы вошли как ' + username;
-            tabBtnRegister.disabled = true;
-            switchTab('shorten');
-        } else {
-            accountBar.classList.remove('show');
-            tabBtnRegister.disabled = false;
-        }
-    }
-
-    logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
-        renderAccountState();
-        switchTab('register');
-    });
-
-    renderAccountState();
-
-    // ---------- Форма регистрации ----------
-    const registerForm = document.getElementById('registerForm');
-    const registerSubmit = document.getElementById('registerSubmit');
-    const registerResult = document.getElementById('registerResult');
-
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        registerSubmit.disabled = true;
-        registerResult.className = 'result';
-        registerResult.textContent = '';
-
-        const firstName = document.getElementById('regFirstName').value.trim();
-        const lastName = document.getElementById('regLastName').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const password = document.getElementById('regPassword').value;
-
-        try {
-            const res = await fetch('/create_account', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    first_name: firstName,
-                    last_name: lastName,
-                    email: email,
-                    password: password,
-                }),
-            });
-            const text = await res.text();
-            if (!res.ok) {
-                registerResult.className = 'result show error';
-                registerResult.textContent = text || 'Ошибка ' + res.status;
-                return;
-            }
-            // Успешная регистрация: запоминаем пользователя (email) и переключаемся на сокращение ссылок
-            localStorage.setItem(STORAGE_KEY, email);
-            renderAccountState();
-        } catch (err) {
-            registerResult.className = 'result show error';
-            registerResult.textContent = 'Ошибка сети: ' + err.message;
-        } finally {
-            registerSubmit.disabled = false;
-        }
-    });
-
-    // ---------- Форма сокращения ссылок ----------
-    const form = document.getElementById('form');
-    const input = document.getElementById('url');
-    const btn = document.getElementById('submit');
-    const result = document.getElementById('result');
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        btn.disabled = true;
-        result.className = 'result';
-        result.textContent = '';
-
-        try {
-            const res = await fetch('/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ original_url: input.value }),
-            });
-            const text = await res.text();
-            if (!res.ok) {
-                result.className = 'result show error';
-                result.textContent = text || 'Ошибка ' + res.status;
-                return;
-            }
-            const data = JSON.parse(text);
-            result.className = 'result show';
-            const a = document.createElement('a');
-            a.href = data.short_url;
-            a.target = '_blank';
-            a.rel = 'noopener';
-            a.textContent = data.short_url;
-            result.append('Готово: ', a);
-        } catch (err) {
-            result.className = 'result show error';
-            result.textContent = 'Ошибка сети: ' + err.message;
-        } finally {
-            btn.disabled = false;
-        }
-    });
-</script>
+<script src="/static/app.js" type="module"></script>
 </body>
 </html>
