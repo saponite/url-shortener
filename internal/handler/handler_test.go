@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/saponite/url-shortner/internal/crypto"
 )
 
 // go test -run handler_test.go
@@ -17,6 +20,7 @@ type mockStorage struct {
 	getByOriginalURLFunc func(ctx context.Context, url string) (*Link, error)
 	getByCodeFunc        func(ctx context.Context, code string) (*Link, error)
 	createFunc           func(ctx context.Context, code, url string) (string, error)
+	loginFunc            func(ctx context.Context, email string) (*User, error)
 }
 
 func (m *mockStorage) GetByOriginalURL(ctx context.Context, url string) (*Link, error) {
@@ -27,8 +31,29 @@ func (m *mockStorage) GetByCode(ctx context.Context, code string) (*Link, error)
 	return m.getByCodeFunc(ctx, code)
 }
 
-func (m *mockStorage) Create(ctx context.Context, code, url string) (string, error) {
+func (m *mockStorage) CreateNewShortLink(ctx context.Context, code, url string) (string, error) {
 	return m.createFunc(ctx, code, url)
+}
+
+// UserStorage — заглушки; конкретное поведение задаётся через *Func поля.
+func (m *mockStorage) CreateNewUserAccount(ctx context.Context, firstName, lastName, email, password string) error {
+	return nil
+}
+
+func (m *mockStorage) UpdatePassword(ctx context.Context, email, password string) error {
+	return nil
+}
+
+func (m *mockStorage) UpdateFirstNameAndLastName(ctx context.Context, userId uuid.UUID, firstName, lastName string) error {
+	return nil
+}
+
+func (m *mockStorage) UpdateEmail(ctx context.Context, userId uuid.UUID, email string) error {
+	return nil
+}
+
+func (m *mockStorage) LoginInAccount(ctx context.Context, email string) (*User, error) {
+	return m.loginFunc(ctx, email)
 }
 
 func TestCreateDuplicateURLReturnsExisting(t *testing.T) {
@@ -228,4 +253,103 @@ func TestGenerateShortCode(t *testing.T) {
 			t.Errorf("входной слайс был изменён: было %q, стало %q", snapshot, original)
 		}
 	})
+}
+
+func TestLoginInAccount_Success(t *testing.T) {
+	hash, err := crypto.HashPassword("secret123")
+	if err != nil {
+		t.Fatalf("хеширование: %v", err)
+	}
+
+	storage := &mockStorage{
+		loginFunc: func(ctx context.Context, email string) (*User, error) {
+			return &User{FirstName: "Иван", LastName: "Иванов", Email: email, Password: hash}, nil
+		},
+	}
+	h := New(storage, "http://test/")
+
+	body := strings.NewReader(`{"email":"ivan@yandex.ru","password":"secret123"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	h.LoginInAccount(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ожидался 200, получили %d (тело: %s)", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("распарсить ответ: %v", err)
+	}
+	if resp["first_name"] != "Иван" {
+		t.Errorf("first_name = %q, ожидалось Иван", resp["first_name"])
+	}
+	if resp["email"] != "ivan@yandex.ru" {
+		t.Errorf("email = %q, ожидалось ivan@yandex.ru", resp["email"])
+	}
+}
+
+func TestLoginInAccount_WrongPassword(t *testing.T) {
+	hash, _ := crypto.HashPassword("secret123")
+
+	storage := &mockStorage{
+		loginFunc: func(ctx context.Context, email string) (*User, error) {
+			return &User{Email: email, Password: hash}, nil
+		},
+	}
+	h := New(storage, "http://test/")
+
+	body := strings.NewReader(`{"email":"ivan@yandex.ru","password":"неверный"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	h.LoginInAccount(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ожидался 401 при неверном пароле, получили %d", w.Code)
+	}
+}
+
+func TestLoginInAccount_UserNotFound(t *testing.T) {
+	storage := &mockStorage{
+		loginFunc: func(ctx context.Context, email string) (*User, error) {
+			return nil, ErrUserNotFound
+		},
+	}
+	h := New(storage, "http://test/")
+
+	body := strings.NewReader(`{"email":"nobody@yandex.ru","password":"secret123"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	h.LoginInAccount(w, req)
+
+	// Тот же 401, что и при неверном пароле — не раскрываем, есть ли такой email.
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ожидался 401 для несуществующего email, получили %d", w.Code)
+	}
+}
+
+func TestLoginInAccount_MissingFields(t *testing.T) {
+	h := New(&mockStorage{}, "http://test/")
+
+	body := strings.NewReader(`{"email":"","password":""}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	h.LoginInAccount(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ожидался 400 при пустых полях, получили %d", w.Code)
+	}
+}
+
+func TestLoginInAccount_InvalidJSON(t *testing.T) {
+	h := New(&mockStorage{}, "http://test/")
+
+	body := strings.NewReader(`{ сломанный json`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	h.LoginInAccount(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ожидался 400 при битом JSON, получили %d", w.Code)
+	}
 }

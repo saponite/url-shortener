@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: url-shortener-container-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - db-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: FINAL
+    image: url-shortener-backend
+    container_name: url-shortener-backend
+    restart: unless-stopped
+    environment:
+      DB: ${DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${POSTGRES_DB}
+      LINK_PREFIX: https://${URL_SHORTENER_SERVICE}/
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - db-net
+      - shared-net
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: url-shortener-nginx
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      URL_SHORTENER_SERVICE: ${URL_SHORTENER_SERVICE}
+      BASE_DOMAIN: ${BASE_DOMAIN}
+    depends_on:
+      - backend
+    networks:
+      - shared-net
+
+volumes:
+  db_data:
+    name: url-shortener-postgres-db
+
+networks:
+  db-net:
+    driver: bridge
+  shared-net:
+    driver: bridge
+    name: shared-network

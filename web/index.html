@@ -3,112 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>Сокращение ссылок</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f5f5f7;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .card {
-            background: #fff;
-            padding: 32px;
-            border-radius: 12px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-            width: 100%;
-            max-width: 480px;
-        }
-        h1 { margin: 0 0 20px; font-size: 20px; font-weight: 600; }
-        form { display: flex; gap: 8px; }
-        input {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid #d1d1d6;
-            border-radius: 8px;
-            font-size: 15px;
-            outline: none;
-        }
-        input:focus { border-color: #0071e3; }
-        input::placeholder { color: #c7c7cc; }   /* светло-серый */
-        button {
-            padding: 10px 18px;
-            background: #0071e3;
-            color: #fff;
-            border: 0;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
-        }
-        button:disabled { background: #c7c7cc; cursor: not-allowed; }
-        .result {
-            margin-top: 18px;
-            padding: 12px 14px;
-            background: #f5f5f7;
-            border-radius: 8px;
-            font-size: 14px;
-            word-break: break-all;
-            display: none;
-        }
-        .result.show { display: block; }
-        .result a { color: #0071e3; text-decoration: none; }
-        .result a:hover { text-decoration: underline; }
-        .result.error { color: #d70015; }
-    </style>
+    <link rel="stylesheet" href="/styles.css">
+    <!-- Тему ставим до отрисовки — без вспышки светлой темы на тёмной. -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('theme');
+                var dark = t ? t === 'dark'
+                    : matchMedia('(prefers-color-scheme: dark)').matches;
+                if (dark) document.documentElement.classList.add('dark');
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
-<div class="card">
-    <h1>Сокращение ссылки</h1>
-    <form id="form">
-        <input id="url" type="url" placeholder="Введите ссылку" required>
-        <button id="submit" type="submit">Сократить</button>
-    </form>
-    <div class="result" id="result"></div>
+<main class="app">
+    <div class="card">
+
+        <header class="header">
+            <h1 class="title">Сокращение ссылок</h1>
+            <div class="header__actions">
+                <!-- Меню аккаунта (видно только залогиненному) -->
+                <div id="userMenu" class="user-menu is-hidden">
+                    <button id="userMenuBtn" class="user-menu__trigger" type="button"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="userMenuDropdown">
+                        <span id="userMenuName" class="user-menu__name truncate"></span>
+                        <svg class="icon user-menu__caret" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"></path>
+                        </svg>
+                    </button>
+                    <div id="userMenuDropdown" class="dropdown is-hidden" role="menu"
+                         aria-labelledby="userMenuBtn">
+                        <button class="dropdown__item" id="menuSettings" type="button" role="menuitem">
+                            Настройки
+                        </button>
+                        <button class="dropdown__item dropdown__item--danger" id="menuLogout" type="button" role="menuitem">
+                            Выйти
+                        </button>
+                    </div>
+                </div>
+
+                <button id="themeToggle" class="btn btn--icon" type="button"
+                        aria-label="Переключить тему" title="Переключить тему">
+                    <svg class="icon theme-icon--sun" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                    </svg>
+                    <svg class="icon theme-icon--moon" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Табы -->
+        <div id="tabs" class="tabs" role="tablist" aria-label="Разделы">
+            <button class="tab" id="tabShorten" type="button" role="tab"
+                    aria-selected="true" aria-controls="panelShorten">Сократить</button>
+            <button class="tab" id="tabAuth" type="button" role="tab"
+                    aria-selected="false" aria-controls="panelAuth">Аккаунт</button>
+        </div>
+
+        <!-- ── Панель: сокращение ── -->
+        <section id="panelShorten" role="tabpanel" aria-labelledby="tabShorten" tabindex="-1">
+            <form id="shortenForm" novalidate>
+                <label class="label" for="url">Ссылка</label>
+                <div class="row">
+                    <input id="url" class="input" type="url" inputmode="url"
+                           placeholder="https://example.com/very/long/path" required
+                           autocomplete="off" aria-describedby="urlError">
+                    <button id="shortenSubmit" class="btn btn--primary" type="submit">
+                        <span data-label>Сократить</span>
+                    </button>
+                </div>
+                <p id="urlError" class="error is-hidden" role="alert"></p>
+            </form>
+
+            <!-- Результат -->
+            <div id="result" class="result is-hidden" tabindex="-1">
+                <p class="result__label">Готово — короткая ссылка:</p>
+                <div class="result__body">
+                    <a id="resultLink" class="result__link" href="#" target="_blank" rel="noopener"></a>
+                    <button id="copyBtn" class="btn btn--outline" type="button">Копировать</button>
+                </div>
+            </div>
+
+            <!-- История «Мои ссылки» — только для авторизованных -->
+            <section id="historySection" class="history is-hidden">
+                <h2 class="history__title">Мои ссылки</h2>
+                <div id="historyBody" aria-live="polite"></div>
+            </section>
+        </section>
+
+        <!-- ── Панель: аккаунт ── -->
+        <section id="panelAuth" role="tabpanel" aria-labelledby="tabAuth" tabindex="-1" hidden>
+            <!-- Вложенные табы вход/регистрация -->
+            <div class="tabs" role="tablist" aria-label="Вход или регистрация">
+                <button class="tab" id="tabLogin" type="button" role="tab"
+                        aria-selected="true" aria-controls="loginForm">Вход</button>
+                <button class="tab" id="tabRegister" type="button" role="tab"
+                        aria-selected="false" aria-controls="registerForm">Регистрация</button>
+            </div>
+
+            <!-- Вход -->
+            <form id="loginForm" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+                <div class="field">
+                    <label class="label" for="loginEmail">Эл. почта</label>
+                    <input id="loginEmail" class="input" type="email" inputmode="email"
+                           placeholder="ivan@yandex.ru" required autocomplete="email"
+                           aria-describedby="loginEmailError">
+                    <p id="loginEmailError" class="error is-hidden" role="alert"></p>
+                </div>
+                <div class="field">
+                    <label class="label" for="loginPassword">Пароль</label>
+                    <input id="loginPassword" class="input" type="password" required
+                           autocomplete="current-password" aria-describedby="loginPasswordError">
+                    <p id="loginPasswordError" class="error is-hidden" role="alert"></p>
+                </div>
+                <button id="loginSubmit" class="btn btn--primary btn--block" type="submit">
+                    <span data-label>Войти</span>
+                </button>
+                <p id="loginResult" class="form-message is-hidden" role="alert"></p>
+            </form>
+
+            <!-- Регистрация -->
+            <form id="registerForm" role="tabpanel" aria-labelledby="tabRegister" novalidate hidden>
+                <div class="grid-2">
+                    <div class="field">
+                        <label class="label" for="regFirstName">Имя</label>
+                        <input id="regFirstName" class="input" type="text" placeholder="Иван"
+                               required autocomplete="given-name" aria-describedby="regFirstNameError">
+                        <p id="regFirstNameError" class="error is-hidden" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="regLastName">Фамилия</label>
+                        <input id="regLastName" class="input" type="text" placeholder="Иванов"
+                               required autocomplete="family-name" aria-describedby="regLastNameError">
+                        <p id="regLastNameError" class="error is-hidden" role="alert"></p>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label" for="regEmail">Эл. почта</label>
+                    <input id="regEmail" class="input" type="email" inputmode="email"
+                           placeholder="ivan@yandex.ru" required autocomplete="email"
+                           aria-describedby="regEmailHint regEmailError">
+                    <p id="regEmailHint" class="hint">
+                        Поддерживаются: yandex.ru, mail.ru, internet.ru, bk.ru, list.ru, inbox.ru, ya.ru
+                    </p>
+                    <p id="regEmailError" class="error is-hidden" role="alert"></p>
+                </div>
+                <div class="field">
+                    <label class="label" for="regPassword">Пароль</label>
+                    <input id="regPassword" class="input" type="password" placeholder="Минимум 8 символов"
+                           required autocomplete="new-password" aria-describedby="regPasswordError">
+                    <p id="regPasswordError" class="error is-hidden" role="alert"></p>
+                </div>
+                <button id="registerSubmit" class="btn btn--primary btn--block" type="submit">
+                    <span data-label>Зарегистрироваться</span>
+                </button>
+                <p id="registerResult" class="form-message is-hidden" role="alert"></p>
+            </form>
+        </section>
+    </div>
+
+    <p class="footnote">Ссылки только с доменами рунета</p>
+</main>
+
+<!-- ── Модалка настроек ── -->
+<div id="settingsModal" class="modal is-hidden" role="dialog" aria-modal="true"
+     aria-labelledby="settingsTitle">
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__card" role="document">
+        <div class="modal__header">
+            <h2 id="settingsTitle" class="modal__title">Настройки</h2>
+            <button id="settingsClose" class="btn btn--icon" type="button"
+                    aria-label="Закрыть" data-close-modal>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"></path>
+                </svg>
+            </button>
+        </div>
+
+        <form id="updatePasswordForm" novalidate>
+            <h3 class="modal__section">Смена пароля</h3>
+            <div class="field">
+                <label class="label" for="newPassword">Новый пароль</label>
+                <input id="newPassword" class="input" type="password" placeholder="Минимум 8 символов"
+                       required autocomplete="new-password" aria-describedby="newPasswordError">
+                <p id="newPasswordError" class="error is-hidden" role="alert"></p>
+            </div>
+            <div class="field">
+                <label class="label" for="confirmPassword">Повторите пароль</label>
+                <input id="confirmPassword" class="input" type="password"
+                       required autocomplete="new-password" aria-describedby="confirmPasswordError">
+                <p id="confirmPasswordError" class="error is-hidden" role="alert"></p>
+            </div>
+            <button id="updatePasswordSubmit" class="btn btn--primary btn--block" type="submit">
+                <span data-label>Обновить пароль</span>
+            </button>
+            <p id="settingsResult" class="form-message is-hidden" role="alert"></p>
+        </form>
+    </div>
 </div>
 
-<script>
-    const form = document.getElementById('form');
-    const input = document.getElementById('url');
-    const btn = document.getElementById('submit');
-    const result = document.getElementById('result');
+<!-- Тосты -->
+<div id="toaster" class="toast-wrap" aria-live="polite" aria-atomic="true"></div>
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        btn.disabled = true;
-        result.className = 'result';
-        result.textContent = '';
-
-        try {
-            const res = await fetch('/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ original_url: input.value }),
-            });
-            const text = await res.text();
-            if (!res.ok) {
-                result.className = 'result show error';
-                result.textContent = text || 'Ошибка ' + res.status;
-                return;
-            }
-            const data = JSON.parse(text);
-            result.className = 'result show';
-            const a = document.createElement('a');
-            a.href = data.short_url;
-            a.target = '_blank';
-            a.rel = 'noopener';
-            a.textContent = data.short_url;
-            result.append('Готово: ', a);
-        } catch (err) {
-            result.className = 'result show error';
-            result.textContent = 'Ошибка сети: ' + err.message;
-        } finally {
-            btn.disabled = false;
-        }
-    });
-</script>
+<script src="/app.js" type="module"></script>
 </body>
 </html>
