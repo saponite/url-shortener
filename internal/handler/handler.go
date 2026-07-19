@@ -54,6 +54,11 @@ type User struct {
 	Password  string `json:"password"`
 }
 
+type UserEmailAndPassword struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 func New(storage *PgStorage, linkPrefix string) *Handler {
 	return &Handler{
 		linkStorage: storage,
@@ -178,11 +183,11 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pos := strings.Index(user.Email, "@")
-	if pos == 0 {
+	if pos <= 0 || pos == len(user.Email)-1 {
 		http.Error(w, "невалидный адрес эл.почты", http.StatusBadRequest)
 		return
 	}
-	domain := user.Email[pos+1:]
+	domain := strings.ToLower(user.Email[pos+1:])
 	if _, found := nonRUDomains[domain]; found {
 		http.Error(w, "домен эл.почты иностранного происхождения не поддерживается", http.StatusBadRequest)
 		return
@@ -196,7 +201,7 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 	hashedPassword, err := crypto.HashPassword(user.Password)
 	if err != nil {
 		log.Printf("ошибка получения хешированного пароля: %v", err)
-		http.Error(w, "внутренняя ошибка", http.StatusBadRequest)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
 		return
 	}
 
@@ -214,6 +219,40 @@ func (h *Handler) CreateNewUserAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, "пользователь зарегистрирован")
+}
+
+func (h *Handler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	var user UserEmailAndPassword
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		http.Error(w, "недействительный JSON", http.StatusBadRequest)
+		return
+	}
+
+	if user.Password == "" {
+		http.Error(w, "пароль пуст", http.StatusBadRequest)
+		return
+	}
+
+	hashedPassword, err := crypto.HashPassword(user.Password)
+	if err != nil {
+		log.Printf("ошибка хеширования пароля: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := r.Context()
+
+	if err := h.userStorage.UpdatePassword(ctx, user.Email, hashedPassword); err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			http.Error(w, "пользователя с таким email не существует", http.StatusBadRequest)
+			return
+		}
+		log.Printf("ошибка БД: %v", err)
+		http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, "пароль успешно обновлён")
 }
 
 func (h *Handler) createWithRetry(ctx context.Context, originalURL, hashInput string, maxRetries int) (string, error) {
@@ -273,7 +312,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (h *Handler) toResponse(l *Link) LinkResponse {
-	base, _ := url.Parse(h.linkPrefix)
+	base, err := url.Parse(h.linkPrefix)
+	if err != nil || base.Host == "" {
+		// LINK_PREFIX не задан/битый — не возвращаем кривой URL, логируем и
+		// отдаём хотя бы согласованный относительный путь.
+		log.Printf("некорректный LINK_PREFIX %q: %v", h.linkPrefix, err)
+		return LinkResponse{
+			OriginalURL: l.OriginalURL,
+			ShortURL:    "/" + l.ShortCode,
+			CreatedAt:   l.CreatedAt,
+		}
+	}
 	base.Path = strings.TrimRight(base.Path, "/") + "/" + l.ShortCode
 
 	return LinkResponse{

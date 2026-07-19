@@ -42,8 +42,7 @@ func main() {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/index.html")
 	})
-	// Статика фронта отдаётся из корня (как это делает nginx из своего webroot).
-	// Литеральные пути chi матчит раньше catch-all "/{code}", так что коллизии нет.
+
 	router.Get("/styles.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/styles.css")
 	})
@@ -53,6 +52,7 @@ func main() {
 	router.Post("/create", h.CreateShortenedLink)
 	router.Get("/{code}", h.GetOriginalURL)
 	router.Post("/create_account", h.CreateNewUserAccount)
+	router.Patch("/update_password", h.UpdatePassword)
 
 	fmt.Println("сервер запущен на :1234")
 	if err := http.ListenAndServe(":1234", router); err != nil {
